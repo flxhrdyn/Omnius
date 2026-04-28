@@ -90,23 +90,24 @@ def scrape_article(url: str) -> tuple[str, str, str | None]:
             page_title = soup.title.string if soup.title else "Tidak Ada Judul"
             word_count = len(article_text.split())
             raise ValueError(
-                f"Scraping gagal. Hanya ditemukan {word_count} kata. "
+                f"Scraping gagal (hanya ditemukan {word_count} kata). "
                 f"Judul halaman: '{page_title}'. "
-                "Kemungkinan situs ini memblokir bot atau konten dirender via JavaScript."
+                "Kemungkinan situs ini memblokir bot atau konten dirender via JavaScript. "
+                "Silakan salin-tempel (copy-paste) isi artikel secara manual."
             )
 
         return title, article_text, None
 
     except requests.exceptions.HTTPError as e:
-        msg = f"Situs menolak akses. Status HTTP {e.response.status_code} untuk URL: {e.request.url}"
+        msg = f"Situs menolak akses (HTTP {e.response.status_code}). Silakan gunakan opsi input teks manual."
         return "Gagal Ekstraksi", "", msg
 
     except requests.exceptions.RequestException as e:
-        msg = f"Gagal terhubung ke URL. Jenis error: {type(e).__name__}"
+        msg = f"Gagal terhubung ke URL. Periksa koneksi atau gunakan opsi input teks manual."
         return "Gagal Ekstraksi", "", msg
 
     except Exception as e:
-        msg = f"Terjadi kesalahan saat memproses halaman. Jenis error: {type(e).__name__}. Detail: {str(e)}"
+        msg = f"Kesalahan sistem saat scraping: {str(e)}. Disarankan menggunakan input teks manual."
         return "Gagal Ekstraksi", "", msg
 
 

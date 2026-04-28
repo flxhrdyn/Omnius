@@ -9,8 +9,9 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from collections import namedtuple
 
-from groq import Groq
+from groq import Groq, APIError, RateLimitError
 from langdetect import detect, LangDetectException
+from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
 
 from app.core.config import (
     FRAMING_SYSTEM_PROMPT,
@@ -45,6 +46,11 @@ def _get_groq_client() -> Groq:
     return Groq(api_key=api_key)
 
 
+@retry(
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    stop=stop_after_attempt(3),
+    retry=retry_if_exception_type((APIError, RateLimitError))
+)
 def analyze_article_text(article_text: str, model_name: str, title: str = "", url: str = "") -> NewsAnalysisModel:
     """Menganalisis satu artikel berita menggunakan model AI Groq.
 
@@ -89,6 +95,11 @@ def analyze_article_text(article_text: str, model_name: str, title: str = "", ur
     return NewsAnalysisModel.model_validate(data)
 
 
+@retry(
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    stop=stop_after_attempt(3),
+    retry=retry_if_exception_type((APIError, RateLimitError))
+)
 def generate_comparative_report(analyses: list[NewsAnalysisModel], model_name: str) -> ComparativeReportModel:
     """Membuat laporan analisis komparatif dari beberapa hasil analisis artikel.
 

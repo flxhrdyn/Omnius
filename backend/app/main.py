@@ -23,7 +23,7 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# Izinkan request dari mana saja (CORS) untuk development
+# Konfigurasi CORS Super-Permissive untuk Debugging Lokal
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

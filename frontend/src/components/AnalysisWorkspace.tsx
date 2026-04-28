@@ -26,6 +26,7 @@ export const AnalysisWorkspace: React.FC = () => {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [progressMsg, setProgressMsg] = useState('Initializing Analysis Engine...');
   const [progress, setProgress] = useState(0);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleAddInput = () => setInputs([...inputs, '']);
   const handleRemoveInput = (index: number) => setInputs(inputs.filter((_, i) => i !== index));
@@ -63,7 +64,7 @@ export const AnalysisWorkspace: React.FC = () => {
       setCurrentStep('results');
     } catch (error: any) {
       console.error(error);
-      alert(error.message || "Analysis failed. Please check your network or API keys.");
+      setErrorMessage(error.message || "Analysis failed. Please check your network or API keys.");
       setCurrentStep('input');
     } finally {
       setIsAnalyzing(false);
@@ -256,32 +257,63 @@ export const AnalysisWorkspace: React.FC = () => {
                     <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">Intelligence Configuration</h1>
                     <p className="text-[#808080] text-sm">Pilih media dan masukkan artikel yang akan dibandingkan.</p>
                   </div>
-                  <div className="flex bg-[#0E1117] p-1 rounded-xl border border-white/5">
+                  <div className="flex bg-[#0E1117] p-1.5 rounded-2xl border border-white/5 shadow-inner">
                     <TabButton active={activeTab === 'link'} onClick={() => setActiveTab('link')} icon={Link2} label="News URL" />
                     <TabButton active={activeTab === 'manual'} onClick={() => setActiveTab('manual')} icon={FileText} label="Full Text" />
                   </div>
                 </div>
 
+                <AnimatePresence>
+                  {errorMessage && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 flex items-start gap-3"
+                    >
+                      <ShieldAlert className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm text-red-200 font-medium">{errorMessage}</p>
+                        <button
+                          onClick={() => setErrorMessage(null)}
+                          className="text-[10px] text-red-400 font-bold uppercase tracking-widest mt-2 hover:text-red-300 transition-colors"
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {inputs.map((input, idx) => (
-                    <div key={idx} className="group relative bg-[#0E1117] border border-white/5 rounded-3xl p-6 focus-within:border-[#2A35D1]/50 transition-all hover:bg-[#11141C]">
-                      <div className="flex justify-between items-center mb-4">
-                        <span className="text-[10px] font-black text-[#303030] tracking-[0.4em] uppercase">Source 0{idx + 1}</span>
+                    <motion.div
+                      layout
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      key={idx}
+                      className="group relative bg-[#11141C] border border-white/5 rounded-3xl p-6 focus-within:border-[#2A35D1]/50 transition-all hover:bg-[#141824] hover:shadow-2xl hover:shadow-[#2A35D1]/5"
+                    >
+                      <div className="flex justify-between items-center mb-6">
+                        <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 rounded-full bg-[#2A35D1]" />
+                          <span className="text-[10px] font-black text-[#606060] tracking-[0.4em] uppercase">Source 0{idx + 1}</span>
+                        </div>
                         {inputs.length > 2 && (
-                          <button onClick={() => handleRemoveInput(idx)} className="text-[#303030] hover:text-ruby-500 transition-colors">
+                          <button onClick={() => handleRemoveInput(idx)} className="text-[#505050] hover:text-red-500 transition-colors p-1 rounded-lg hover:bg-red-500/10">
                             <Trash2 className="w-4 h-4" />
                           </button>
                         )}
                       </div>
                       {activeTab === 'link' ? (
                         <div className="relative">
-                          <Link2 className="absolute left-4 top-4 w-4 h-4 text-[#404040]" />
+                          <Link2 className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#606060] group-focus-within:text-[#2A35D1] transition-colors" />
                           <input
                             type="text"
                             value={input}
                             onChange={(e) => updateInput(idx, e.target.value)}
                             placeholder="Paste article direct link..."
-                            className="w-full bg-[#06080B] border border-white/5 rounded-2xl py-4 pl-12 pr-4 text-sm focus:ring-1 focus:ring-[#2A35D1] outline-none transition-all placeholder:text-[#303030]"
+                            className="w-full bg-[#080A0E] border border-white/5 rounded-2xl py-4 pl-12 pr-4 text-sm focus:ring-1 focus:ring-[#2A35D1]/50 outline-none transition-all placeholder:text-[#505050] text-white"
                           />
                         </div>
 
@@ -290,18 +322,21 @@ export const AnalysisWorkspace: React.FC = () => {
                           value={input}
                           onChange={(e) => updateInput(idx, e.target.value)}
                           placeholder="Paste article text content here..."
-                          className="w-full bg-[#06080B] border border-white/5 rounded-2xl p-4 text-sm focus:ring-1 focus:ring-[#2A35D1] outline-none h-44 resize-none transition-all placeholder:text-[#303030]"
+                          className="w-full bg-[#080A0E] border border-white/5 rounded-2xl p-4 text-sm focus:ring-1 focus:ring-[#2A35D1]/50 outline-none h-48 resize-none transition-all placeholder:text-[#505050] text-white leading-relaxed"
                         />
                       )}
-                    </div>
+                    </motion.div>
                   ))}
-                  <button
+                  <motion.button
+                    layout
                     onClick={handleAddInput}
-                    className="h-full min-h-[120px] rounded-3xl border-2 border-dashed border-white/5 flex flex-col items-center justify-center gap-3 text-[#404040] hover:text-[#2A35D1] hover:border-[#2A35D1]/30 transition-all bg-white/[0.01] hover:bg-[#2A35D1]/5"
+                    className="h-full min-h-[140px] rounded-3xl border-2 border-dashed border-white/10 flex flex-col items-center justify-center gap-3 text-[#A0A0A0] hover:text-[#2A35D1] hover:border-[#2A35D1]/30 transition-all bg-white/[0.01] hover:bg-[#2A35D1]/5 group/add"
                   >
-                    <Plus className="w-6 h-6" />
-                    <span className="text-xs font-bold uppercase tracking-widest">Add Source</span>
-                  </button>
+                    <div className="w-12 h-12 rounded-full border border-dashed border-[#606060] group-hover/add:border-[#2A35D1] flex items-center justify-center transition-colors bg-[#11141C]">
+                      <Plus className="w-6 h-6" />
+                    </div>
+                    <span className="text-[11px] font-black uppercase tracking-[0.3em]">Add Source</span>
+                  </motion.button>
                 </div>
 
                 <div className="flex flex-col items-center gap-6 pt-8">
@@ -315,7 +350,7 @@ export const AnalysisWorkspace: React.FC = () => {
                   >
                     <div className="flex items-center gap-3">
                       {isAnalyzing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Cpu className="w-5 h-5 group-hover:rotate-12 transition-transform" />}
-                      {isAnalyzing ? "Menganalisis Framing..." : "Jalankan Analisis Robert Entman"}
+                      {isAnalyzing ? "Menganalisis Framing..." : "Jalankan Analisis"}
                     </div>
                   </button>
                 </div>
@@ -379,7 +414,7 @@ const TabButton = ({ active, onClick, icon: Icon, label }: { active: boolean, on
     onClick={onClick}
     className={cn(
       "flex items-center gap-2 px-6 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all",
-      active ? "bg-[#2A35D1] text-white shadow-md shadow-[#2A35D1]/10" : "text-[#505050] hover:text-white"
+      active ? "bg-[#2A35D1] text-white shadow-md shadow-[#2A35D1]/10" : "text-[#A0A0A0] hover:text-white"
     )}
   >
     <Icon className="w-3 h-3" /> {label}

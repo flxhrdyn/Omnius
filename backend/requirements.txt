@@ -7,3 +7,4 @@ lxml
 langdetect
 groq
 pydantic
+tenacity
