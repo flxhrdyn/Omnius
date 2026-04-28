@@ -12,9 +12,6 @@
   [![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
   [![Groq](https://img.shields.io/badge/Groq_Cloud-F55036?style=for-the-badge&logo=ai&logoColor=white)](https://console.groq.com/)
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
-
-  <br />
-  <img src="assets/screenshot.png" alt="Omnius Intelligence Workspace" width="100%" style="border-radius: 12px; margin-top: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);" />
 </div>
 
 ---
