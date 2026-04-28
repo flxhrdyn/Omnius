@@ -1,5 +1,5 @@
 [project]
-name = "llm-news-framing-analysis"
+name = "llm-omnius"
 version = "0.1.0"
 description = "Automated news framing analysis tool based on Robert Entman's methodology using Groq LLM intelligence."
 readme = "README.md"

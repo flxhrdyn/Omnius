@@ -142,6 +142,3 @@ This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) f
 *   [Hugging Face](https://huggingface.co/felixhrdyn)
 
 ---
-<div align="center">
-  Built for Objective Media Analysis.
-</div>

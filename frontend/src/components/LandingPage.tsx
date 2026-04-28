@@ -29,7 +29,7 @@ export const LandingPage: React.FC = () => {
             Omnius
           </span>
         </div>
-        <div className="hidden md:flex gap-8 text-sm font-medium text-[#808080]">
+        <div className="hidden md:flex absolute left-1/2 -translate-x-1/2 gap-8 text-sm font-medium text-[#808080]">
           <a href="#metode" className="hover:text-white transition-colors">Metodologi</a>
           <a href="#arsitektur" className="hover:text-white transition-colors">Arsitektur AI</a>
         </div>
@@ -68,7 +68,7 @@ export const LandingPage: React.FC = () => {
           transition={{ duration: 0.6, delay: 0.2 }}
           className="text-lg md:text-xl text-[#A0A0A0] max-w-2xl mx-auto mb-12 font-light leading-relaxed"
         >
-          Analisis framing otomatis berbasis teori <strong className="text-white font-semibold">Robert Entman</strong>, didukung infrastruktur <strong className="text-white font-semibold">LLM (Llama 3.3 & Qwen)</strong> untuk mengungkap bias sistemik media massa.
+          Analisis framing otomatis berbasis teori <strong className="text-white font-semibold">Robert Entman</strong>, didukung infrastruktur <strong className="text-white font-semibold">LLM (Llama 3.3 & Qwen 3)</strong> untuk mengungkap bias sistemik media massa.
         </motion.p>
 
         <motion.div
@@ -89,16 +89,16 @@ export const LandingPage: React.FC = () => {
       {/* Methodology Grid */}
       <section id="metode" className="relative z-10 py-24 border-t border-white/5 bg-[#080A0E]/50">
         <div className="max-w-7xl mx-auto px-6">
-          <div className="flex flex-col xl:flex-row gap-10 xl:gap-16 mb-20 xl:items-end justify-between">
-            <div className="shrink-0">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 mb-20 lg:items-end">
+            <div className="lg:col-span-7 xl:col-span-6 shrink-0">
               <span className="text-[10px] font-bold text-[#2A35D1] uppercase tracking-[0.3em] mb-4 block">Theoretical Foundation</span>
               <h2 className="text-4xl md:text-5xl lg:text-[44px] xl:text-5xl font-bold text-white leading-tight">
-                <span className="inline-block whitespace-nowrap">Empat Pilar Framing Theory</span> <br />Menurut Robert Entman
+                <span className="inline-block whitespace-nowrap">4 Pilar Framing Theory</span> <br />Menurut Robert Entman
               </h2>
             </div>
-            <div className="flex flex-col gap-3">
-              <p className="text-[#808080] text-lg max-w-md">
-                Kami mentranslasikan metodologi akademis yang kompleks ke dalam algoritma AI yang presisi untuk membedah setiap sudut narasi.
+            <div className="lg:col-span-5 xl:col-span-5 xl:col-start-8 flex flex-col gap-3">
+              <p className="text-[#808080] text-lg">
+                Menjembatani teori akademis dengan kecanggihan AI untuk membantu Anda memahami narasi dari segala sudut pandang secara akurat.
               </p>
               <a
                 href="https://fbaum.unc.edu/teaching/articles/J-Communication-1993-Entman.pdf"
@@ -142,27 +142,43 @@ export const LandingPage: React.FC = () => {
 
       {/* Architecture Info */}
       <section id="arsitektur" className="py-24 border-t border-white/5">
-        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-3 gap-12">
-          <div className="space-y-4">
-            <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
-              <Zap className="w-6 h-6 text-amber-400" />
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 mb-20 lg:items-end">
+            <div className="lg:col-span-7 xl:col-span-6 shrink-0">
+              <span className="text-[10px] font-bold text-[#2A35D1] uppercase tracking-[0.3em] mb-4 block">System Architecture</span>
+              <h2 className="text-4xl md:text-5xl font-bold text-white leading-tight">
+                <span className="inline-block whitespace-nowrap">High-Performance</span> <br /> AI Pipeline
+              </h2>
             </div>
-            <h4 className="text-xl font-bold text-white">Groq API Velocity</h4>
-            <p className="text-sm text-[#808080] leading-relaxed">Kecepatan inferensi tinggi untuk ekstraksi data masif secara real-time tanpa penundaan.</p>
+            <div className="lg:col-span-5 xl:col-span-5 xl:col-start-8 flex flex-col gap-3">
+              <p className="text-[#808080] text-lg">
+                Didukung oleh arsitektur <i>asynchronous</i> FastAPI dan integrasi Groq Cloud, menghadirkan <i>pipeline</i> NLP dengan latensi ultra-rendah untuk ekstraksi narasi skala besar.
+              </p>
+            </div>
           </div>
-          <div className="space-y-4">
-            <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
-              <ShieldCheck className="w-6 h-6 text-emerald-400" />
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+            <div className="space-y-4">
+              <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+                <Zap className="w-6 h-6 text-amber-400" />
+              </div>
+              <h4 className="text-xl font-bold text-white">Groq API Velocity</h4>
+              <p className="text-sm text-[#808080] leading-relaxed">Kecepatan inferensi AI tinggi untuk ekstraksi data secara real-time tanpa penundaan.</p>
             </div>
-            <h4 className="text-xl font-bold text-white">Advanced Cleaning</h4>
-            <p className="text-sm text-[#808080] leading-relaxed">Scraper kami secara cerdas membersihkan iklan, navigasi, dan konten 'sampah' dari website berita berita.</p>
-          </div>
-          <div className="space-y-4">
-            <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
-              <BookOpen className="w-6 h-6 text-purple-400" />
+            <div className="space-y-4">
+              <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+                <ShieldCheck className="w-6 h-6 text-emerald-400" />
+              </div>
+              <h4 className="text-xl font-bold text-white">Advanced Cleaning</h4>
+              <p className="text-sm text-[#808080] leading-relaxed">Scraper kami secara cerdas membersihkan iklan, navigasi, dan konten tidak relevan dari website berita.</p>
             </div>
-            <h4 className="text-xl font-bold text-white">Structured Output</h4>
-            <p className="text-sm text-[#808080] leading-relaxed">Hasil analisis disajikan dalam format laporan profesional yang siap untuk publikasi maupun riset akademik.</p>
+            <div className="space-y-4">
+              <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+                <BookOpen className="w-6 h-6 text-purple-400" />
+              </div>
+              <h4 className="text-xl font-bold text-white">Structured Output</h4>
+              <p className="text-sm text-[#808080] leading-relaxed">Hasil analisis disajikan dalam laporan komprehensif untuk memperdalam wawasan strategis Anda.</p>
+            </div>
           </div>
         </div>
       </section>
