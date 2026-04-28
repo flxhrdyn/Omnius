@@ -12,6 +12,9 @@
   [![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
   [![Groq](https://img.shields.io/badge/Groq_Cloud-F55036?style=for-the-badge&logo=ai&logoColor=white)](https://console.groq.com/)
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+
+  <br />
+  <img src="assets/screenshot.png" alt="Omnius Intelligence Workspace" width="100%" style="border-radius: 12px; margin-top: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);" />
 </div>
 
 ---
@@ -28,8 +31,10 @@ In an era of information warfare and systemic bias, Omnius provides a "truth-tel
 - **Comparative Synthesis**: Generates high-level intelligence reports that find common ground and key discrepancies between different media outlets.
 - **Narrative Network Matrix**: Interactive **D3.js-powered** graph visualization that reveals the "Shared Nucleus" of keywords connecting different sources.
 - **Bias Intelligence Indicator**: Real-time sentiment and bias detection across media actors and overall article tone.
-- **Sleek Intelligence Workspace**: A modern, dark-themed dashboard inspired by high-end intelligence tools, featuring smooth transitions and professional typography.
+- **Sleek Intelligence Workspace**: A modern, dark-themed dashboard inspired by high-end intelligence tools, featuring high-contrast UI, fluid animations, and professional typography.
 - **Model Configurator**: Hot-swap between different LLM engines (Llama, Qwen) to adjust analysis depth and speed.
+- **Fail-Safe Processing**: Automatic retry mechanism with exponential backoff for handling LLM rate limits and temporary API outages.
+- **Smart Scraping Fallback**: Context-aware error handling that suggests manual text input when news sites block automatic extraction.
 
 ## Technology Stack
 
@@ -40,6 +45,7 @@ In an era of information warfare and systemic bias, Omnius provides a "truth-tel
 - **NLP & Language**: Langdetect (Automatic article language identification)
 - **Scraping Engine**: BeautifulSoup4 with **lxml** parser & Requests
 - **Data Modeling**: Pydantic v2 (Strict schema and data integrity)
+- **Fault Tolerance**: Tenacity (Retry logic for robust AI pipeline)
 
 ### Frontend (React & TypeScript)
 - **Framework**: **React 19** with **Vite 6**
