@@ -15,4 +15,6 @@ dependencies = [
     "uvicorn[standard]",
     "python-dotenv",
     "tenacity",
+    "pydantic-ai",
+    "tavily-python",
 ]

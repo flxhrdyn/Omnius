@@ -1,6 +1,8 @@
 import requests
 import re
+import os
 from concurrent.futures import ThreadPoolExecutor
+from tavily import TavilyClient
 
 from bs4 import BeautifulSoup
 
@@ -98,16 +100,33 @@ def scrape_article(url: str) -> tuple[str, str, str | None]:
 
         return title, article_text, None
 
-    except requests.exceptions.HTTPError as e:
-        msg = f"Situs menolak akses (HTTP {e.response.status_code}). Silakan gunakan opsi input teks manual."
-        return "Gagal Ekstraksi", "", msg
+    except (requests.exceptions.RequestException, Exception) as e:
+        # Fallback ke Tavily jika request standar gagal atau ditolak (misal: 403 atau 404)
+        api_key = os.environ.get("TAVILY_API_KEY")
+        if api_key:
+            try:
+                tavily = TavilyClient(api_key=api_key)
+                # Gunakan search dengan include_content untuk mendapatkan isi artikel
+                # (Tavily memiliki sistem scraping yang lebih canggih untuk melewati bot protection)
+                tv_res = tavily.search(query=url, search_depth="advanced", include_content=True, max_results=1)
+                
+                if tv_res and tv_res.get("results"):
+                    best_match = tv_res["results"][0]
+                    content = best_match.get("content", "")
+                    title = best_match.get("title", "Judul dari Tavily")
+                    
+                    if len(content.split()) > 50:
+                        return title, content, None
+            except:
+                pass # Jika Tavily juga gagal, lanjut ke error message original
 
-    except requests.exceptions.RequestException as e:
-        msg = f"Gagal terhubung ke URL. Periksa koneksi atau gunakan opsi input teks manual."
-        return "Gagal Ekstraksi", "", msg
-
-    except Exception as e:
-        msg = f"Kesalahan sistem saat scraping: {str(e)}. Disarankan menggunakan input teks manual."
+        if isinstance(e, requests.exceptions.HTTPError):
+            msg = f"Situs menolak akses (HTTP {e.response.status_code}). Silakan gunakan opsi input teks manual."
+        elif isinstance(e, requests.exceptions.RequestException):
+            msg = f"Gagal terhubung ke URL. Periksa koneksi atau gunakan opsi input teks manual."
+        else:
+            msg = f"Kesalahan sistem saat scraping: {str(e)}. Disarankan menggunakan input teks manual."
+        
         return "Gagal Ekstraksi", "", msg
 
 

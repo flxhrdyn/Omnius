@@ -7,4 +7,6 @@ lxml
 langdetect
 groq
 pydantic
+pydantic-ai
+tavily-python
 tenacity

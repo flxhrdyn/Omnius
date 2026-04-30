@@ -24,62 +24,49 @@ In an era of information warfare and systemic bias, Omnius provides a "truth-tel
 
 ## Core Features
 
-- **Automated Framing Intelligence**: Identifies Robert Entman's 4 framing pillars using state-of-the-art LLMs (Llama 3.3, 3.1, and Qwen).
+- **Autonomous AI Research Agent**: Powered by **Pydantic AI**, an intelligent agent that autonomously searches and filters high-quality news articles across the internet based on user topics.
+- **Automated Framing Intelligence**: Identifies Robert Entman's 4 framing pillars using state-of-the-art LLMs (**Llama 3.3 70B** and **Qwen 3 32B**).
+- **Advanced Scraping Fallback**: Hybrid scraping engine utilizing **BeautifulSoup4** for standard extraction and **Tavily Extraction API** as a robust fallback for sites with anti-bot protections.
 - **Comparative Synthesis**: Generates high-level intelligence reports that find common ground and key discrepancies between different media outlets.
 - **Narrative Network Matrix**: Interactive **D3.js-powered** graph visualization that reveals the "Shared Nucleus" of keywords connecting different sources.
-- **Bias Intelligence Indicator**: Real-time sentiment and bias detection across media actors and overall article tone.
-- **Sleek Intelligence Workspace**: A modern, dark-themed dashboard inspired by high-end intelligence tools, featuring high-contrast UI, fluid animations, and professional typography.
-- **Model Configurator**: Hot-swap between different LLM engines (Llama, Qwen) to adjust analysis depth and speed.
-- **Fail-Safe Processing**: Automatic retry mechanism with exponential backoff for handling LLM rate limits and temporary API outages.
-- **Smart Scraping Fallback**: Context-aware error handling that suggests manual text input when news sites block automatic extraction.
+- **Model Configurator**: Hot-swap between different LLM engines to adjust analysis depth and speed directly from the workspace.
 
 ## Technology Stack
 
 ### Backend (Python & FastAPI)
+- **Agent Framework**: **Pydantic AI** (Agentic AI orchestration)
+- **LLM Integration**: **Groq Cloud** (Llama 3.3-70B, Llama 3.1-8B, Qwen 3 32B)
+- **Search & Extraction**: **Tavily API** (Autonomous search & AI-powered content extraction)
 - **Framework**: FastAPI (Asynchronous High-Performance API)
-- **Web Server**: Uvicorn with Gunicorn support
-- **LLM Orchestration**: Groq SDK (Llama 3.3-70B, Llama 3.1-8B, Qwen 3 32B)
-- **NLP & Language**: Langdetect (Automatic article language identification)
-- **Scraping Engine**: BeautifulSoup4 with **lxml** parser & Requests
-- **Data Modeling**: Pydantic v2 (Strict schema and data integrity)
+- **Scraping Engine**: BeautifulSoup4 with **lxml** parser
 - **Fault Tolerance**: Tenacity (Retry logic for robust AI pipeline)
 
 ### Frontend (React & TypeScript)
 - **Framework**: **React 19** with **Vite 6**
-- **Language**: TypeScript (Strictly typed architecture)
 - **Styling**: **Tailwind CSS v4** & **Motion v12** (Fluid animations)
-- **Routing**: **React Router v7** (Decoupled navigation)
-- **Visualization**: **D3.js** (Dynamic Network Graphs), **Recharts** (Bias Indicators)
+- **Visualization**: **D3.js** (Dynamic Network Graphs) & **Lucide React** (Professional Iconography)
 - **Content Rendering**: **React Markdown** (LLM Synthesis display)
-- **Networking**: Axios (Async HTTP requests)
-- **Icons**: Lucide React
-
-### Deployment & DevOps
-- **Containerization**: Docker with **uv** (Ultra-fast Python package installer)
-- **Runtime**: Node.js 22 (Frontend) & Python 3.12 (Backend)
-- **Architecture**: Decoupled Monorepo (Independent Frontend & Backend)
 
 ## System Architecture
 
 ```mermaid
-graph TD
     subgraph UI_Layer [Frontend - React]
         Landing[Landing Page] --> Workspace[Analysis Workspace]
-        Workspace --> Config[Model Configuration]
-        Workspace --> Result[Intelligence Dashboard]
+        Workspace --> ResearchTab[AI Research Tab]
+        ResearchTab -->|POST /api/research| ResearchLogic[Research Logic]
     end
     
-    subgraph API_Layer [Backend - FastAPI]
-        Result -->|POST /api/analyze| Analyze[Analysis Endpoint]
-        Analyze -->|Scrape| SCR[BS4 Scraper]
+    subgraph Agent_Layer [AI Agent - PydanticAI]
+        ResearchLogic -->|Search| TAV[Tavily Search API]
+        TAV -->|Filter URLs| AGENT[Research Agent]
+        AGENT -->|Valid Articles| Workspace
+    end
+
+    subgraph Analysis_Layer [Backend - FastAPI]
+        Workspace -->|POST /api/analyze| Analyze[Analysis Pipeline]
+        Analyze -->|Scrape| SCR[Hybrid Scraper BS4/Tavily]
         SCR -->|Analyze| LLM[Groq AI Engine]
         LLM -->|Validate| PYD[Pydantic Models]
-    end
-    
-    subgraph Output_Layer [Visual Intelligence]
-        PYD -->|D3.js| Graph[Narrative Network]
-        PYD -->|Recharts| Charts[Bias Metrics]
-        PYD -->|Synthesis| Report[Comparative Report]
     end
 ```
 
@@ -116,7 +103,7 @@ npm install
 npm run dev
 ```
 
-The application will be available at `http://localhost:5173`.
+The application will be available at `http://localhost:3000`.
 
 ---
 

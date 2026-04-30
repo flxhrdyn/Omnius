@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { motion } from 'motion/react';
-import { BookOpen, Target, Scale, Zap, Info, ArrowRight, ShieldCheck, Cpu } from 'lucide-react';
+import { BookOpen, Target, Scale, Zap, Info, ArrowRight, ShieldCheck, Cpu, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export const LandingPage: React.FC = () => {
@@ -68,7 +68,8 @@ export const LandingPage: React.FC = () => {
           transition={{ duration: 0.6, delay: 0.2 }}
           className="text-lg md:text-xl text-[#A0A0A0] max-w-2xl mx-auto mb-12 font-light leading-relaxed"
         >
-          Analisis framing otomatis berbasis teori <strong className="text-white font-semibold">Robert Entman</strong>, didukung infrastruktur <strong className="text-white font-semibold">LLM (Llama 3.3 & Qwen 3)</strong> untuk mengungkap bias sistemik media massa.
+          Analisis framing otomatis berbasis teori <strong className="text-white font-semibold">Robert Entman</strong>,
+          didukung oleh <strong className="text-white font-semibold">AI Research Agent</strong> untuk pencarian berita dan infrastruktur <strong className="text-white font-semibold">LLM (Llama 3.3 & Qwen 3)</strong> untuk mengungkap pola framing dan bias narasi media massa.
         </motion.p>
 
         <motion.div
@@ -81,7 +82,7 @@ export const LandingPage: React.FC = () => {
             onClick={() => navigate('/workspace')}
             className="group px-10 py-5 rounded-2xl bg-[#2A35D1] hover:bg-[#3A45E1] text-white font-bold transition-all flex items-center gap-3 shadow-2xl shadow-[#2A35D1]/30"
           >
-            Mulai Analisis Sekarang <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            Mulai Analisis Framing <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
           </button>
         </motion.div>
       </section>
@@ -152,25 +153,32 @@ export const LandingPage: React.FC = () => {
             </div>
             <div className="lg:col-span-5 xl:col-span-5 xl:col-start-8 flex flex-col gap-3">
               <p className="text-[#808080] text-lg">
-                Didukung oleh arsitektur <i>asynchronous</i> FastAPI dan integrasi Groq Cloud, menghadirkan <i>pipeline</i> NLP dengan latensi ultra-rendah untuk ekstraksi narasi skala besar.
+                Didukung oleh arsitektur <i>asynchronous</i> <b>FastAPI</b>, framework <b>Pydantic AI</b>, dan integrasi <b>Groq Cloud</b>, menghadirkan <i>pipeline</i> NLP dengan latensi rendah untuk ekstraksi narasi skala besar.
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
+            <div className="space-y-4">
+              <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+                <Sparkles className="w-6 h-6 text-[#2A35D1]" />
+              </div>
+              <h4 className="text-xl font-bold text-white">Autonomous Agent</h4>
+              <p className="text-sm text-[#808080] leading-relaxed">Agent cerdas berbasis <b>Pydantic AI</b> & Llama 3.3 70B yang mampu melakukan riset berita secara otonom di internet.</p>
+            </div>
             <div className="space-y-4">
               <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
                 <Zap className="w-6 h-6 text-amber-400" />
               </div>
-              <h4 className="text-xl font-bold text-white">Groq API Velocity</h4>
-              <p className="text-sm text-[#808080] leading-relaxed">Kecepatan inferensi AI tinggi untuk ekstraksi data secara real-time tanpa penundaan.</p>
+              <h4 className="text-xl font-bold text-white">High-Speed Inference</h4>
+              <p className="text-sm text-[#808080] leading-relaxed">Integrasi Groq API memungkinkan analisis narasi kompleks secara cepat, dibanding metode manual.</p>
             </div>
             <div className="space-y-4">
               <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
                 <ShieldCheck className="w-6 h-6 text-emerald-400" />
               </div>
               <h4 className="text-xl font-bold text-white">Advanced Cleaning</h4>
-              <p className="text-sm text-[#808080] leading-relaxed">Scraper kami secara cerdas membersihkan iklan, navigasi, dan konten tidak relevan dari website berita.</p>
+              <p className="text-sm text-[#808080] leading-relaxed">Scraper kami secara cerdas membersihkan iklan dan konten tidak relevan dari website berita.</p>
             </div>
             <div className="space-y-4">
               <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">

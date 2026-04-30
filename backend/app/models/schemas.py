@@ -1,4 +1,4 @@
-from typing import List, Literal
+from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
 
 
@@ -41,3 +41,23 @@ class AnalysisResultModel(BaseModel):
     """Skema respons API final yang dikirimkan ke React frontend."""
     analyses: List[NewsAnalysisModel]
     comparativeReport: ComparativeReportModel
+
+
+class ResearchRequest(BaseModel):
+    """Request body untuk mencari berita berdasarkan topik."""
+    topic: str = Field(description="Topik atau kata kunci berita yang dicari.")
+
+
+class ResearchArticleSchema(BaseModel):
+    """Skema artikel hasil temuan agent untuk dikirim ke frontend."""
+    title: str
+    source: str
+    url: str
+    snippet: str
+    reason: str
+    publishedDate: Optional[str] = None
+
+
+class ResearchResponse(BaseModel):
+    """Respons API berisi list artikel hasil riset agent."""
+    articles: List[ResearchArticleSchema]

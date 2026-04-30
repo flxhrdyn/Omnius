@@ -15,7 +15,9 @@ from typing import Optional
 load_dotenv()
 
 from app.services.analyzer import run_full_analysis
+from app.services.agent_service import research_news_by_topic
 from app.core.config import AVAILABLE_MODELS
+from app.models.schemas import ResearchRequest, ResearchResponse
 
 app = FastAPI(
     title="Omnius API",
@@ -91,3 +93,13 @@ def analyze(request: AnalyzeRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Terjadi kesalahan internal: {str(e)}")
+
+
+@app.post("/api/research", response_model=ResearchResponse)
+async def research(request: ResearchRequest):
+    """Endpoint untuk mencari berita secara otomatis berdasarkan topik menggunakan Agentic AI."""
+    try:
+        result = await research_news_by_topic(request.topic)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gagal melakukan riset berita: {str(e)}")

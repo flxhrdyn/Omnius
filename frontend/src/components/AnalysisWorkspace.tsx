@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Link2, FileText, Send, Loader2, LayoutDashboard, Settings, Info, Plus, Trash2, BrainCircuit, ChevronRight, CheckCircle2, History, Database, Globe, Cpu, Home, Zap, ShieldAlert } from 'lucide-react';
+import { Link2, FileText, Send, Loader2, LayoutDashboard, Settings, Info, Plus, Trash2, BrainCircuit, ChevronRight, CheckCircle2, History, Database, Globe, Cpu, Home, Zap, ShieldAlert, Search, Sparkles, Calendar } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { analyzeNews } from '../services/apiService';
 import { AnalysisResult } from '../types';
@@ -13,6 +13,7 @@ import { ResultDashboard } from './ResultDashboard';
 import { cn } from '../lib/utils';
 
 type Step = 'input' | 'processing' | 'results';
+type Tab = 'link' | 'manual' | 'research';
 
 
 export const AnalysisWorkspace: React.FC = () => {
@@ -20,24 +21,81 @@ export const AnalysisWorkspace: React.FC = () => {
   const [activeSidebar, setActiveSidebar] = useState<'analysis' | 'config'>('analysis');
   const [selectedModel, setSelectedModel] = useState<string>('llama-3.3-70b-versatile');
   const [currentStep, setCurrentStep] = useState<Step>('input');
-  const [activeTab, setActiveTab] = useState<'link' | 'manual'>('link');
-  const [inputs, setInputs] = useState<string[]>(['', '']);
+  const [activeTab, setActiveTab] = useState<Tab>('research');
+  const [researchTopic, setResearchTopic] = useState('');
+  const [researchResults, setResearchResults] = useState<any[]>([]);
+  const [isResearching, setIsResearching] = useState(false);
+  const [urlInputs, setUrlInputs] = useState<string[]>(['', '']);
+  const [manualInputs, setManualInputs] = useState<string[]>(['', '']);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [progressMsg, setProgressMsg] = useState('Initializing Analysis Engine...');
   const [progress, setProgress] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleAddInput = () => setInputs([...inputs, '']);
-  const handleRemoveInput = (index: number) => setInputs(inputs.filter((_, i) => i !== index));
+  const handleAddInput = () => {
+    if (activeTab === 'manual') setManualInputs([...manualInputs, '']);
+    else setUrlInputs([...urlInputs, '']);
+  };
+
+  const handleRemoveInput = (index: number) => {
+    if (activeTab === 'manual') setManualInputs(manualInputs.filter((_, i) => i !== index));
+    else setUrlInputs(urlInputs.filter((_, i) => i !== index));
+  };
+
   const updateInput = (index: number, value: string) => {
-    const newInputs = [...inputs];
-    newInputs[index] = value;
-    setInputs(newInputs);
+    if (activeTab === 'manual') {
+      const newInputs = [...manualInputs];
+      newInputs[index] = value;
+      setManualInputs(newInputs);
+    } else {
+      const newInputs = [...urlInputs];
+      newInputs[index] = value;
+      setUrlInputs(newInputs);
+    }
+  };
+
+  const runResearch = async () => {
+    if (!researchTopic.trim()) return;
+    setIsResearching(true);
+    setErrorMessage(null);
+    try {
+      const response = await fetch('http://localhost:8000/api/research', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic: researchTopic })
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Research failed');
+      }
+      const data = await response.json();
+      setResearchResults(data.articles);
+    } catch (error: any) {
+      setErrorMessage(error.message);
+    } finally {
+      setIsResearching(false);
+    }
+  };
+
+  const useResearchArticle = (url: string) => {
+    // Cek jika sudah ada agar tidak duplikat di urlInputs
+    if (urlInputs.includes(url)) return;
+
+    // Cari input yang kosong atau tambah baru di urlInputs
+    const emptyIdx = urlInputs.findIndex(i => i.trim() === '');
+    if (emptyIdx !== -1) {
+      const newInputs = [...urlInputs];
+      newInputs[emptyIdx] = url;
+      setUrlInputs(newInputs);
+    } else {
+      setUrlInputs([...urlInputs, url]);
+    }
   };
 
   const runAnalysis = async () => {
-    const validInputs = inputs.filter(i => i.trim() !== '');
+    const currentInputs = activeTab === 'manual' ? manualInputs : urlInputs;
+    const validInputs = currentInputs.filter(i => i.trim() !== '');
     if (validInputs.length < 1) return;
 
     setCurrentStep('processing');
@@ -258,6 +316,7 @@ export const AnalysisWorkspace: React.FC = () => {
                     <p className="text-[#808080] text-sm">Pilih media dan masukkan artikel yang akan dibandingkan.</p>
                   </div>
                   <div className="flex bg-[#0E1117] p-1.5 rounded-2xl border border-white/5 shadow-inner">
+                    <TabButton active={activeTab === 'research'} onClick={() => setActiveTab('research')} icon={Sparkles} label="AI Research" />
                     <TabButton active={activeTab === 'link'} onClick={() => setActiveTab('link')} icon={Link2} label="News URL" />
                     <TabButton active={activeTab === 'manual'} onClick={() => setActiveTab('manual')} icon={FileText} label="Full Text" />
                   </div>
@@ -285,8 +344,175 @@ export const AnalysisWorkspace: React.FC = () => {
                   )}
                 </AnimatePresence>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {inputs.map((input, idx) => (
+                {activeTab === 'research' && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-8"
+                  >
+                    <div className="bg-[#11141C] border border-white/5 rounded-3xl p-8">
+                      <div className="flex items-center gap-3 mb-6">
+                        <Sparkles className="w-5 h-5 text-[#2A35D1]" />
+                        <h2 className="text-xl font-bold text-white tracking-tight">AI News Research Assistant</h2>
+                      </div>
+                      <p className="text-[#808080] text-sm mb-8 leading-relaxed">
+                        Masukkan sebuah topik atau isu berita. Agent AI kami akan menelusuri internet menggunakan Tavily 
+                        untuk menemukan artikel-artikel yang paling relevan untuk dianalisis.
+                      </p>
+                      
+                      <div className="flex gap-3">
+                        <div className="relative flex-1">
+                          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#606060]" />
+                          <input
+                            type="text"
+                            value={researchTopic}
+                            onChange={(e) => setResearchTopic(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && runResearch()}
+                            placeholder="Contoh: Dampak ekonomi PPN 12% di Indonesia..."
+                            className="w-full bg-[#080A0E] border border-white/5 rounded-2xl py-4 pl-12 pr-4 text-sm focus:ring-1 focus:ring-[#2A35D1]/50 outline-none transition-all text-white"
+                          />
+                        </div>
+                        <button
+                          onClick={runResearch}
+                          disabled={isResearching}
+                          className="px-8 rounded-2xl bg-[#2A35D1] text-white font-bold text-sm hover:bg-[#3A45E1] transition-all disabled:opacity-50 flex items-center gap-2 whitespace-nowrap"
+                        >
+                          {isResearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                          Cari Berita
+                        </button>
+                      </div>
+                    </div>
+
+                    <AnimatePresence>
+                      {researchResults.length > 0 && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          className="space-y-6"
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <h3 className="text-xs font-black text-[#505050] uppercase tracking-[0.3em]">AI Recommendations</h3>
+                            <div className="flex items-center gap-4">
+                              <span className="text-[10px] text-emerald-500 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-full">FOUND {researchResults.length} ARTICLES</span>
+                              {urlInputs.filter(i => i.trim() !== '').length > 0 && (
+                                <span className="text-[10px] text-[#2A35D1] font-bold bg-[#2A35D1]/10 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                  {urlInputs.filter(i => i.trim() !== '').length} SELECTED
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Quick Analysis Trigger for Research Tab */}
+                          {urlInputs.filter(i => i.trim() !== '').length >= 1 && (
+                            <motion.div
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className="bg-gradient-to-r from-[#2A35D1]/20 to-transparent border-l-2 border-[#2A35D1] p-6 rounded-r-3xl flex flex-col md:flex-row items-center justify-between gap-6 mb-8"
+                            >
+                              <div className="space-y-1">
+                                <h4 className="text-sm font-bold text-white">Ready for Framing Analysis?</h4>
+                                <p className="text-xs text-[#808080]">Anda telah memilih {urlInputs.filter(i => i.trim() !== '').length} artikel. Mulai dekonstruksi narasi sekarang.</p>
+                              </div>
+                              <button
+                                onClick={runAnalysis}
+                                className="px-8 py-3 rounded-xl bg-[#2A35D1] text-white text-xs font-bold shadow-lg shadow-[#2A35D1]/30 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 whitespace-nowrap"
+                              >
+                                <Cpu className="w-4 h-4" />
+                                Jalankan Analisis Sekarang
+                              </button>
+                            </motion.div>
+                          )}
+
+                          <div className="grid grid-cols-1 gap-4">
+                            {researchResults.map((article, idx) => {
+                              const isAdded = urlInputs.includes(article.url);
+                              return (
+                                <motion.div
+                                  key={idx}
+                                  initial={{ opacity: 0, x: -20 }}
+                                  animate={{ opacity: 1, x: 0 }}
+                                  transition={{ delay: idx * 0.1 }}
+                                  className={cn(
+                                    "bg-[#0E1117] border rounded-3xl p-6 transition-all group relative overflow-hidden",
+                                    isAdded ? "border-emerald-500/30 bg-emerald-500/[0.02]" : "border-white/5 hover:border-[#2A35D1]/30"
+                                  )}
+                                >
+                                  {/* Background subtle glow on hover */}
+                                  {!isAdded && <div className="absolute inset-0 bg-gradient-to-br from-[#2A35D1]/0 to-[#2A35D1]/0 group-hover:from-[#2A35D1]/5 group-hover:to-transparent transition-all duration-500" />}
+                                  
+                                  <div className="flex justify-between items-start gap-6 relative z-10">
+                                    <div className="space-y-4 flex-1">
+                                      <div className="space-y-2">
+                                        <div className="flex items-center gap-2">
+                                          <div className="px-2 py-0.5 rounded-md bg-white/5 border border-white/5 text-[9px] font-black text-[#808080] uppercase tracking-wider flex items-center gap-1.5">
+                                            <Globe className="w-3 h-3 text-[#2A35D1]" />
+                                            {article.source || 'Unknown Source'}
+                                          </div>
+                                          {article.publishedDate && (
+                                            <div className="px-2 py-0.5 rounded-md bg-white/5 border border-white/5 text-[9px] font-black text-[#606060] uppercase tracking-wider flex items-center gap-1.5">
+                                              <Calendar className="w-3 h-3 text-amber-500/50" />
+                                              {article.publishedDate}
+                                            </div>
+                                          )}
+                                          {isAdded && (
+                                            <div className="px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-[9px] font-black text-emerald-500 uppercase tracking-wider flex items-center gap-1">
+                                              <CheckCircle2 className="w-3 h-3" />
+                                              Added to Queue
+                                            </div>
+                                          )}
+                                        </div>
+                                        <a 
+                                          href={article.url} 
+                                          target="_blank" 
+                                          rel="noopener noreferrer"
+                                          className="block group/link"
+                                        >
+                                          <h4 className="text-lg font-bold text-white group-hover/link:text-[#2A35D1] transition-colors flex items-center gap-2">
+                                            {article.title}
+                                            <Link2 className="w-4 h-4 opacity-0 group-hover/link:opacity-100 transition-all -translate-x-2 group-hover/link:translate-x-0" />
+                                          </h4>
+                                        </a>
+                                        <p className="text-sm text-[#808080] line-clamp-2 leading-relaxed">{article.snippet}</p>
+                                      </div>
+
+                                      <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 space-y-2">
+                                        <div className="flex items-center gap-2 text-[10px] font-black text-[#2A35D1] uppercase tracking-[0.2em]">
+                                          <BrainCircuit className="w-3 h-3" />
+                                          AI Insights
+                                        </div>
+                                        <p className="text-xs text-[#606060] leading-relaxed italic">
+                                          "{article.reason}"
+                                        </p>
+                                      </div>
+                                    </div>
+
+                                    <button
+                                      onClick={() => useResearchArticle(article.url)}
+                                      disabled={isAdded}
+                                      className={cn(
+                                        "shrink-0 w-12 h-12 rounded-2xl transition-all flex items-center justify-center shadow-lg shadow-black/20",
+                                        isAdded 
+                                          ? "bg-emerald-500 text-white cursor-default" 
+                                          : "bg-[#2A35D1]/10 text-[#2A35D1] hover:bg-[#2A35D1] hover:text-white"
+                                      )}
+                                      title={isAdded ? "Sudah ditambahkan" : "Gunakan artikel ini untuk analisis"}
+                                    >
+                                      {isAdded ? <CheckCircle2 className="w-6 h-6" /> : <Plus className="w-6 h-6" />}
+                                    </button>
+                                  </div>
+                                </motion.div>
+                              );
+                            })}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.div>
+                )}
+
+                {activeTab !== 'research' && (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {(activeTab === 'manual' ? manualInputs : urlInputs).map((input, idx) => (
                     <motion.div
                       layout
                       initial={{ opacity: 0, y: 20 }}
@@ -299,7 +525,7 @@ export const AnalysisWorkspace: React.FC = () => {
                           <div className="w-1.5 h-1.5 rounded-full bg-[#2A35D1]" />
                           <span className="text-[10px] font-black text-[#606060] tracking-[0.4em] uppercase">Source 0{idx + 1}</span>
                         </div>
-                        {inputs.length > 2 && (
+                        {(activeTab === 'manual' ? manualInputs : urlInputs).length > 2 && (
                           <button onClick={() => handleRemoveInput(idx)} className="text-[#505050] hover:text-red-500 transition-colors p-1 rounded-lg hover:bg-red-500/10">
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -338,6 +564,7 @@ export const AnalysisWorkspace: React.FC = () => {
                     <span className="text-[11px] font-black uppercase tracking-[0.3em]">Add Source</span>
                   </motion.button>
                 </div>
+                )}
 
                 <div className="flex flex-col items-center gap-6 pt-8">
                   <button
