@@ -51,8 +51,8 @@ def search_tavily(ctx: RunContext[None], query: str) -> str:
     
     try:
         tavily = TavilyClient(api_key=api_key)
-        # Menggunakan topic="news" untuk hasil yang lebih terkurasi dengan metadata tanggal yang lebih baik
-        response = tavily.search(query=query, search_depth="advanced", topic="news", max_results=10)
+        # Menggunakan topic="news" dan time_range="week" untuk hasil terbaru (1 minggu terakhir)
+        response = tavily.search(query=query, search_depth="advanced", topic="news", time_range="week", max_results=10)
         
         # Format hasil agar mudah dibaca oleh LLM
         results = []
