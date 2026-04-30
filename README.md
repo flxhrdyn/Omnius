@@ -11,6 +11,7 @@
   [![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
   [![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
   [![Groq](https://img.shields.io/badge/Groq_Cloud-F55036?style=for-the-badge&logo=ai&logoColor=white)](https://console.groq.com/)
+  [![Pydantic](https://img.shields.io/badge/Pydantic-E92063?style=for-the-badge&logo=pydantic&logoColor=white)](https://pydantic.dev/)
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 </div>
 
@@ -89,7 +90,8 @@ cd backend
 uv sync
 
 # Create .env file
-echo "GROQ_API_KEY=your_key_here" > .env
+echo "GROQ_API_KEY=your_groq_key" > .env
+echo "TAVILY_API_KEY=your_tavily_key" >> .env
 
 # Run the server
 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
