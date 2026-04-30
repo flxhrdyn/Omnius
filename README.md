@@ -81,6 +81,7 @@ graph TD
 *   **uv** (Fast Python package manager)
 *   Node.js 22+ & npm
 *   Groq Cloud API Key
+*   Tavily API Key
 
 ### 1. Backend Setup
 ```bash
