@@ -50,23 +50,24 @@ In an era of information warfare and systemic bias, Omnius provides a "truth-tel
 ## System Architecture
 
 ```mermaid
-    subgraph UI_Layer [Frontend - React]
-        Landing[Landing Page] --> Workspace[Analysis Workspace]
-        Workspace --> ResearchTab[AI Research Tab]
-        ResearchTab -->|POST /api/research| ResearchLogic[Research Logic]
+graph TD
+    subgraph UI_Layer ["Frontend - React"]
+        Landing["Landing Page"] --> Workspace["Analysis Workspace"]
+        Workspace --> ResearchTab["AI Research Tab"]
+        ResearchTab -->|"/api/research"| ResearchLogic["Research Logic"]
     end
     
-    subgraph Agent_Layer [AI Agent - PydanticAI]
-        ResearchLogic -->|Search| TAV[Tavily Search API]
-        TAV -->|Filter URLs| AGENT[Research Agent]
-        AGENT -->|Valid Articles| Workspace
+    subgraph Agent_Layer ["AI Agent - PydanticAI"]
+        ResearchLogic -->|"Search"| TAV["Tavily Search API"]
+        TAV -->|"Filter URLs"| AGENT["Research Agent"]
+        AGENT -->|"Valid Articles"| Workspace
     end
 
-    subgraph Analysis_Layer [Backend - FastAPI]
-        Workspace -->|POST /api/analyze| Analyze[Analysis Pipeline]
-        Analyze -->|Scrape| SCR[Hybrid Scraper BS4/Tavily]
-        SCR -->|Analyze| LLM[Groq AI Engine]
-        LLM -->|Validate| PYD[Pydantic Models]
+    subgraph Analysis_Layer ["Backend - FastAPI"]
+        Workspace -->|"/api/analyze"| Analyze["Analysis Pipeline"]
+        Analyze -->|"Scrape"| SCR["Hybrid Scraper BS4/Tavily"]
+        SCR -->|"Analyze"| LLM["Groq AI Engine"]
+        LLM -->|"Validate"| PYD["Pydantic Models"]
     end
 ```
 
