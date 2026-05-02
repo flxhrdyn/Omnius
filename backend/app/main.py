@@ -5,35 +5,58 @@ dengan logika scraping dan analisis Groq di Python.
 """
 
 import os
-from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+import json
+import logging
+from dotenv import load_dotenv, find_dotenv
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
 
-# Muat environment variables dari .env di root project
-load_dotenv()
+# Konfigurasi Logging agar muncul di terminal
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-from app.services.analyzer import run_full_analysis
+# Muat environment variables dengan lebih reliabel
+load_dotenv(find_dotenv())
+
+from app.services.pipeline import AnalysisPipeline
 from app.services.agent_service import research_news_by_topic
 from app.core.config import AVAILABLE_MODELS
 from app.models.schemas import ResearchRequest, ResearchResponse
 
 app = FastAPI(
-    title="Omnius API",
-    description="API backend untuk analisis framing berita menggunakan Groq LLM.",
+    title="Omnius AI API",
+    description="Backend API untuk analisis framing berita menggunakan Groq dan Pydantic AI.",
     version="1.0.0",
 )
 
-# Konfigurasi CORS Super-Permissive untuk Debugging Lokal
+# Konfigurasi CORS (Cross-Origin Resource Sharing)
+# Kita gabungkan default dev dengan apa yang ada di .env
+allowed_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://10.20.20.7:3000",
+    "http://10.20.20.7:5173"
+]
+
+raw_origins = os.getenv("ALLOWED_ORIGINS", "")
+if raw_origins:
+    extra_origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
+    allowed_origins.extend(extra_origins)
+
+# Hilangkan duplikasi
+allowed_origins = list(set(allowed_origins))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 class ArticleInput(BaseModel):
     """Input untuk satu artikel: bisa berupa URL atau teks manual."""
@@ -84,9 +107,24 @@ def analyze(request: AnalyzeRequest):
 
     articles_data = [article.model_dump(exclude_none=True) for article in request.articles]
 
+    # Langkah 3: Konversi data mentah menjadi ArticleProviders (Seam & Adapter)
+    from app.services.providers import URLArticleProvider, ManualArticleProvider
+    providers = []
+    for art in articles_data:
+        if art.get("url"):
+            providers.append(URLArticleProvider(art["url"]))
+        else:
+            providers.append(ManualArticleProvider(art.get("title", ""), art.get("text", "")))
+
     try:
-        result = run_full_analysis(articles_data, request.model)
-        return result.model_dump()
+        pipeline = AnalysisPipeline(request.model)
+        
+        def event_generator():
+            for event in pipeline.run_stream(providers):
+                yield f"data: {json.dumps(event)}\n\n"
+
+        from fastapi.responses import StreamingResponse
+        return StreamingResponse(event_generator(), media_type="text/event-stream")
 
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))

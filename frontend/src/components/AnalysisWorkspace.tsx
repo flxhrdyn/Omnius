@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link2, FileText, Send, Loader2, LayoutDashboard, Settings, Info, Plus, Trash2, BrainCircuit, ChevronRight, CheckCircle2, History, Database, Globe, Cpu, Home, Zap, ShieldAlert, Search, Sparkles, Calendar } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { analyzeNews } from '../services/apiService';
+import { analyzeNews, researchNews } from '../services/apiService';
 import { AnalysisResult } from '../types';
 import { ResultDashboard } from './ResultDashboard';
 import { cn } from '../lib/utils';
@@ -60,16 +60,7 @@ export const AnalysisWorkspace: React.FC = () => {
     setIsResearching(true);
     setErrorMessage(null);
     try {
-      const response = await fetch('http://localhost:8000/api/research', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: researchTopic })
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || 'Research failed');
-      }
-      const data = await response.json();
+      const data = await researchNews(researchTopic);
       setResearchResults(data.articles);
     } catch (error: any) {
       setErrorMessage(error.message);
@@ -101,23 +92,16 @@ export const AnalysisWorkspace: React.FC = () => {
     setCurrentStep('processing');
     setIsAnalyzing(true);
 
-    const messages = [
-      'Scraping & cleaning source metadata (Removing ads/scripts)...',
-      'Isolating core narrative from background noise...',
-      'Mapping actors and causal relationships...',
-      'Applying Robert Entman framing filter...',
-      'Generating comparative intelligence report...',
-      'Synthesizing final findings...'
-    ];
-
     try {
-      for (let i = 0; i < messages.length; i++) {
-        setProgressMsg(messages[i]);
-        setProgress(Math.round(((i + 1) / messages.length) * 100));
-        await new Promise(r => setTimeout(r, 800));
-      }
-
-      const data = await analyzeNews(validInputs, activeTab === 'manual' ? 'manual' : 'link', selectedModel);
+      const data = await analyzeNews(
+        validInputs,
+        activeTab === 'manual' ? 'manual' : 'link',
+        selectedModel,
+        (status) => {
+          setProgressMsg(status.message);
+          setProgress(status.percent);
+        }
+      );
       setResult(data);
       setCurrentStep('results');
     } catch (error: any) {

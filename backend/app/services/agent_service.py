@@ -65,13 +65,20 @@ def search_tavily(ctx: RunContext[None], query: str) -> str:
         return f"Terjadi kesalahan saat memanggil Tavily: {str(e)}"
 
 async def research_news_by_topic(topic: str) -> ResearchResult:
-    """Menjalankan agent untuk mencari berita berdasarkan topik.
-    
-    Args:
-        topic: Topik atau isu berita yang ingin dicari.
-        
-    Returns:
-        Objek ResearchResult berisi list artikel pilihan agent.
-    """
+    """Menjalankan agent untuk mencari berita berdasarkan topik."""
     result = await research_agent.run(f"Cari berita terbaru mengenai topik ini: {topic}")
-    return result.output
+    output = result.output
+
+    # Langkah 3: Deduplikasi hasil riset secara terprogram (Locality: Logika penyaringan ada di sini)
+    unique_articles = []
+    seen_urls = set()
+
+    for article in output.articles:
+        # Normalisasi URL: hapus trailing slash dan ubah ke lowercase untuk perbandingan
+        normalized_url = article.url.rstrip('/').lower()
+        if normalized_url not in seen_urls:
+            unique_articles.append(article)
+            seen_urls.add(normalized_url)
+    
+    output.articles = unique_articles
+    return output

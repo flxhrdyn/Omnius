@@ -15,9 +15,9 @@ RUN apt-get update && apt-get install -y \
 # Install 'uv' for ultra-fast dependency management
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Copy dependency files first to leverage Docker cache
-COPY pyproject.toml .
-COPY requirements.txt .
+# Copy backend dependency files first to leverage Docker cache
+# Note: We are in the root, so we copy from backend/
+COPY backend/requirements.txt .
 
 # Install Python dependencies using uv
 RUN uv pip install --system -r requirements.txt
@@ -25,12 +25,12 @@ RUN uv pip install --system -r requirements.txt
 # Pre-download NLTK resources to avoid runtime latency
 RUN python -c "import nltk; nltk.download('stopwords')"
 
-# Copy the rest of the application code
-COPY . .
+# Copy the backend source code
+COPY backend/ .
 
-# Expose the default Streamlit port
-EXPOSE 8501
+# Expose the port (Azure App Service/Container Apps standard)
+EXPOSE 8080
 
-# Command to run the application
-# We use --server.address=0.0.0.0 to allow external access to the container
-CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+# Command to run the FastAPI application
+# We use --host 0.0.0.0 to allow external access to the container
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
