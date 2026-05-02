@@ -47,27 +47,39 @@ jobs:
           docker build -t ${{ env.ACR_NAME }}.azurecr.io/${{ env.APP_NAME }}:${{ github.sha }} .
           docker push ${{ env.ACR_NAME }}.azurecr.io/${{ env.APP_NAME }}:${{ github.sha }}
 
-      - name: Configure and Deploy Container
+      - name: Grant Web App access to ACR (Managed Identity)
         run: |
-          # Pastikan Admin User menyala di ACR dan tunggu 10 detik agar sistem sinkron
-          az acr update -n ${{ env.ACR_NAME }} --admin-enabled true
-          sleep 10
-          
-          # Ambil password admin dari ACR
-          ACR_PASSWORD=$(az acr credential show --name ${{ env.ACR_NAME }} --query "passwords[0].value" -o tsv)
-          
-          # Berikan kredensial ke Web App agar bisa narik image
-          az webapp config container set --name ${{ env.APP_NAME }} --resource-group omniusregflx \
-            --docker-custom-image-name ${{ env.ACR_NAME }}.azurecr.io/${{ env.APP_NAME }}:${{ github.sha }} \
-            --docker-registry-server-url https://${{ env.ACR_NAME }}.azurecr.io \
-            --docker-registry-server-user ${{ env.ACR_NAME }} \
-            --docker-registry-server-password "$ACR_PASSWORD"
+          # Aktifkan system identity di Web App
+          az webapp identity assign --name ${{ env.APP_NAME }} --resource-group omniusregflx
+
+          # Ambil principal ID dari identity Web App
+          PRINCIPAL_ID=$(az webapp identity show --name ${{ env.APP_NAME }} --resource-group omniusregflx --query principalId -o tsv)
+
+          # Ambil ID dari ACR
+          ACR_ID=$(az acr show --name ${{ env.ACR_NAME }} --query id -o tsv)
+
+          # Berikan izin 'AcrPull' ke Web App
+          az role assignment create --assignee $PRINCIPAL_ID --scope $ACR_ID --role AcrPull 2>/dev/null || true
+
+      - name: Deploy container image to Web App
+        run: |
+          az webapp config container set \
+            --name ${{ env.APP_NAME }} \
+            --resource-group omniusregflx \
+            --container-image-name ${{ env.ACR_NAME }}.azurecr.io/${{ env.APP_NAME }}:${{ github.sha }} \
+            --container-registry-url https://${{ env.ACR_NAME }}.azurecr.io
 
       - name: Set App Settings in Azure
         run: |
-          az webapp config appsettings set --name ${{ env.APP_NAME }} --resource-group omniusregflx --settings \
-            GROQ_API_KEY=${{ secrets.GROQ_API_KEY }} \
-            TAVILY_API_KEY=${{ secrets.TAVILY_API_KEY }} \
-            ALLOWED_ORIGINS="*" \
-            WEBSITES_PORT=8080 \
-            WEBSITES_CONTAINER_START_TIME_LIMIT=1800
+          az webapp config appsettings set \
+            --name ${{ env.APP_NAME }} \
+            --resource-group omniusregflx \
+            --settings \
+              GROQ_API_KEY="${{ secrets.GROQ_API_KEY }}" \
+              TAVILY_API_KEY="${{ secrets.TAVILY_API_KEY }}" \
+              ALLOWED_ORIGINS="*" \
+              WEBSITES_PORT="8080" \
+              WEBSITES_CONTAINER_START_TIME_LIMIT="1800"
+
+      - name: Restart Web App
+        run: az webapp restart --name ${{ env.APP_NAME }} --resource-group omniusregflx
