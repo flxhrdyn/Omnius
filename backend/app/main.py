@@ -119,10 +119,18 @@ def analyze(request: AnalyzeRequest):
         
         def event_generator():
             for event in pipeline.run_stream(providers):
-                yield f"data: {json.dumps(event)}\n\n"
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
         from fastapi.responses import StreamingResponse
-        return StreamingResponse(event_generator(), media_type="text/event-stream")
+        return StreamingResponse(
+            event_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+                "Connection": "keep-alive",
+            }
+        )
 
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
