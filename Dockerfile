@@ -21,9 +21,6 @@ COPY backend/requirements.txt .
 # Install Python dependencies using uv
 RUN uv pip install --system -r requirements.txt
 
-# Pre-download NLTK resources to avoid runtime latency
-RUN python -c "import nltk; nltk.download('stopwords')"
-
 # Copy the backend source code
 COPY backend/ .
 

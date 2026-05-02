@@ -80,14 +80,6 @@ Instruksi:
 }
 """
 
-# Peta nama label tampilan ke kunci JSON dari hasil analisis framing.
-# Urutan di sini menentukan urutan tampilan di UI.
-FRAMING_LABEL_MAP = {
-    "Definisi Masalah": "problem_definition",
-    "Interpretasi Penyebab": "causal_interpretation",
-    "Evaluasi Moral": "moral_evaluation",
-    "Rekomendasi Solusi": "treatment_recommendation",
-}
 
 # Stopwords kustom khusus untuk konten berita Indonesia.
 # Kata-kata ini sering muncul di artikel berita tetapi tidak membawa makna
