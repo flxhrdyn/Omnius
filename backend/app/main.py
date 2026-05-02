@@ -34,11 +34,12 @@ app = FastAPI(
 # Konfigurasi CORS (Cross-Origin Resource Sharing)
 # Konfigurasi CORS: Prioritas '*' untuk kemudahan akses, atau list spesifik
 raw_origins = os.getenv("ALLOWED_ORIGINS", "*")
-if "*" in raw_origins:
+use_wildcard = "*" in raw_origins
+
+if use_wildcard:
     allowed_origins = ["*"]
 else:
     allowed_origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
-    # Tambahkan origin default untuk development dan Netlify Anda
     allowed_origins.extend([
         "http://localhost:5173",
         "https://omnius-news-analysis.netlify.app"
@@ -48,7 +49,8 @@ else:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_credentials=True,
+    # Jika pakai wildcard '*', credentials harus False demi keamanan dan standar browser
+    allow_credentials=not use_wildcard,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"]
