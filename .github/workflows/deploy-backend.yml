@@ -44,14 +44,15 @@ jobs:
 
       - name: Build and push container image
         run: |
-          # Pastikan Admin User menyala di ACR
-          az acr update -n ${{ env.ACR_NAME }} --admin-enabled true
-          
           docker build -t ${{ env.ACR_NAME }}.azurecr.io/${{ env.APP_NAME }}:${{ github.sha }} .
           docker push ${{ env.ACR_NAME }}.azurecr.io/${{ env.APP_NAME }}:${{ github.sha }}
 
       - name: Configure and Deploy Container
         run: |
+          # Pastikan Admin User menyala di ACR dan tunggu 10 detik agar sistem sinkron
+          az acr update -n ${{ env.ACR_NAME }} --admin-enabled true
+          sleep 10
+          
           # Ambil password admin dari ACR
           ACR_PASSWORD=$(az acr credential show --name ${{ env.ACR_NAME }} --query "passwords[0].value" -o tsv)
           
@@ -60,7 +61,7 @@ jobs:
             --docker-custom-image-name ${{ env.ACR_NAME }}.azurecr.io/${{ env.APP_NAME }}:${{ github.sha }} \
             --docker-registry-server-url https://${{ env.ACR_NAME }}.azurecr.io \
             --docker-registry-server-user ${{ env.ACR_NAME }} \
-            --docker-registry-server-password $ACR_PASSWORD
+            --docker-registry-server-password "$ACR_PASSWORD"
 
       - name: Set App Settings in Azure
         run: |
