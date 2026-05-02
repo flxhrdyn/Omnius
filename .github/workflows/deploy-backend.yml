@@ -23,6 +23,9 @@ jobs:
       - name: Install dependencies
         run: cd backend && uv pip install --system -r requirements.txt pytest httpx
       - name: Run tests
+        env:
+          GROQ_API_KEY: fake-key
+          TAVILY_API_KEY: fake-key
         run: cd backend && export PYTHONPATH=. && uv run pytest
 
   build-and-deploy:
