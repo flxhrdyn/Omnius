@@ -2,7 +2,7 @@ name: Deploy Omnius Backend to Azure
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "feature/refactor-analysis-engine" ]
   workflow_dispatch:
 
 env:
