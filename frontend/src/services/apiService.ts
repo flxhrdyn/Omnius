@@ -6,6 +6,13 @@
 import { AnalysisResult } from '../types';
 
 export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_KEY = import.meta.env.VITE_API_KEY || '';
+
+/** Header yang dikirim ke setiap endpoint yang terproteksi. */
+const authHeaders = (): Record<string, string> => ({
+  'Content-Type': 'application/json',
+  ...(API_KEY ? { 'X-API-Key': API_KEY } : {}),
+});
 
 export interface ArticleInput {
   url?: string;
@@ -29,7 +36,7 @@ export async function analyzeNews(
 
   const response = await fetch(`${API_BASE_URL}/api/analyze`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(),
     body: JSON.stringify({ articles, model }),
   });
 
@@ -88,7 +95,7 @@ export async function getAvailableModels(): Promise<string[]> {
 export async function researchNews(topic: string): Promise<any> {
   const response = await fetch(`${API_BASE_URL}/api/research`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(),
     body: JSON.stringify({ topic }),
   });
 

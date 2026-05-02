@@ -8,7 +8,8 @@ import os
 import json
 import logging
 from dotenv import load_dotenv, find_dotenv
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Security, Depends
+from fastapi.security.api_key import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
@@ -31,30 +32,37 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# Konfigurasi CORS (Cross-Origin Resource Sharing)
-# Konfigurasi CORS: Prioritas '*' untuk kemudahan akses, atau list spesifik
-raw_origins = os.getenv("ALLOWED_ORIGINS", "*")
-use_wildcard = "*" in raw_origins
-
-if use_wildcard:
-    allowed_origins = ["*"]
-else:
-    allowed_origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
-    allowed_origins.extend([
-        "http://localhost:5173",
-        "https://omnius-news-analysis.netlify.app"
-    ])
-    allowed_origins = list(set(allowed_origins))
+# ── CORS Configuration ───────────────────────────────────────────────────────
+# Baca dari env; fallback ke localhost saja (bukan wildcard) untuk keamanan.
+raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173")
+allowed_origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
+# Selalu sertakan localhost untuk development
+if "http://localhost:5173" not in allowed_origins:
+    allowed_origins.append("http://localhost:5173")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    # Jika pakai wildcard '*', credentials harus False demi keamanan dan standar browser
-    allow_credentials=not use_wildcard,
-    allow_methods=["*"],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["*"]
 )
+
+# ── API Key Protection ────────────────────────────────────────────────────────
+API_KEY_NAME = "X-API-Key"
+_api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+def verify_api_key(api_key: str = Security(_api_key_header)):
+    """Dependency: memastikan setiap request ke endpoint sensitif menyertakan API key yang valid."""
+    expected_key = os.getenv("OMNIUS_API_KEY")
+    # Jika OMNIUS_API_KEY tidak dikonfigurasi di environment, lewati pengecekan
+    # (berguna saat development lokal tanpa .env)
+    if not expected_key:
+        logger.warning("OMNIUS_API_KEY tidak dikonfigurasi. Endpoint tidak terproteksi!")
+        return
+    if api_key != expected_key:
+        raise HTTPException(status_code=401, detail="API key tidak valid atau tidak ditemukan.")
 
 class ArticleInput(BaseModel):
     """Input untuk satu artikel: bisa berupa URL atau teks manual."""
@@ -82,7 +90,7 @@ def get_models():
 
 
 @app.post("/api/analyze")
-def analyze(request: AnalyzeRequest):
+def analyze(request: AnalyzeRequest, _: None = Depends(verify_api_key)):
     """Endpoint utama: menerima URL atau teks, mengembalikan hasil analisis framing.
 
     Body JSON yang diharapkan:
@@ -140,7 +148,7 @@ def analyze(request: AnalyzeRequest):
 
 
 @app.post("/api/research", response_model=ResearchResponse)
-async def research(request: ResearchRequest):
+async def research(request: ResearchRequest, _: None = Depends(verify_api_key)):
     """Endpoint untuk mencari berita secara otomatis berdasarkan topik menggunakan Agentic AI."""
     try:
         result = await research_news_by_topic(request.topic)
