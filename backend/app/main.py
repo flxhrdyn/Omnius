@@ -32,23 +32,18 @@ app = FastAPI(
 )
 
 # Konfigurasi CORS (Cross-Origin Resource Sharing)
-# Kita gabungkan default dev dengan apa yang ada di .env
-allowed_origins = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://10.20.20.7:3000",
-    "http://10.20.20.7:5173"
-]
-
-raw_origins = os.getenv("ALLOWED_ORIGINS", "")
-if raw_origins:
-    extra_origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
-    allowed_origins.extend(extra_origins)
-
-# Hilangkan duplikasi
-allowed_origins = list(set(allowed_origins))
+# Konfigurasi CORS: Prioritas '*' untuk kemudahan akses, atau list spesifik
+raw_origins = os.getenv("ALLOWED_ORIGINS", "*")
+if "*" in raw_origins:
+    allowed_origins = ["*"]
+else:
+    allowed_origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
+    # Tambahkan origin default untuk development dan Netlify Anda
+    allowed_origins.extend([
+        "http://localhost:5173",
+        "https://omnius-news-analysis.netlify.app"
+    ])
+    allowed_origins = list(set(allowed_origins))
 
 app.add_middleware(
     CORSMiddleware,
@@ -56,6 +51,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
 
 class ArticleInput(BaseModel):
