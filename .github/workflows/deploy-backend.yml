@@ -6,8 +6,8 @@ on:
   workflow_dispatch:
 
 env:
-  ACR_NAME: omniusregistry # Ganti dengan nama ACR Anda nanti
-  APP_NAME: omnius-api      # Ganti dengan nama App Service Anda nanti
+  ACR_NAME: omniusregflx
+  APP_NAME: omnius-api-flx
 
 jobs:
   test:
