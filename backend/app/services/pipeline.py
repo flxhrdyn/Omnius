@@ -50,7 +50,7 @@ class AnalysisPipeline:
             return
 
         # 3. Generate Comparative Report
-        yield {"status": "Generating comparative report...", "progress": 90}
+        yield {"status": "progress", "message": "Menyusun laporan komparatif intelijen...", "percent": 90}
         comparative_report = self._generate_comparative_report(valid_analyses)
         
         # 4. Final Result

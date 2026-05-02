@@ -64,7 +64,7 @@ def test_pipeline_streaming_logic():
 
     with patch.dict('os.environ', {'GROQ_API_KEY': 'fake-key'}):
         with patch('app.services.pipeline.NarrativeExtractor', return_value=mock_extractor):
-            with patch('app.services.pipeline.generate_comparative_report') as mock_comp:
+            with patch('app.services.pipeline.AnalysisPipeline._generate_comparative_report') as mock_comp:
                 # Berikan model Pydantic yang valid agar tidak ValidationError
                 mock_comp.return_value = ComparativeReportModel(
                     summary="Laporan Komparatif",
