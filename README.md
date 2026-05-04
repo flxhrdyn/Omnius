@@ -74,7 +74,7 @@ graph LR
 
 ### Backend (Python & FastAPI)
 - **Agent Framework**: **Pydantic AI** (Agentic AI orchestration)
-- **LLM Integration**: **Groq Cloud** (Llama 3.3-70B, Llama 3.1-8B, Qwen 2.5 32B)
+- **LLM Integration**: **Groq Cloud** (Llama 3.3 70B, Llama 3.1 8B, Qwen 3 32B)
 - **Search & Extraction**: **Tavily API** (Autonomous search & AI-powered content extraction)
 - **Framework**: **FastAPI** (Asynchronous High-Performance API)
 - **Scraping Engine**: **BeautifulSoup4** with **lxml** parser
