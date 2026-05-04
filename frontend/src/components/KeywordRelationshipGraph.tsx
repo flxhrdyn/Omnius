@@ -101,7 +101,7 @@ export const KeywordRelationshipGraph: React.FC<KeywordGraphProps> = ({ analyses
       .force('link', d3.forceLink<Node, Link>(links).id(d => d.id).distance(80))
       .force('charge', d3.forceManyBody().strength(-150))
       .force('center', d3.forceCenter(0, 0))
-      .force('collision', d3.forceCollide().radius(d => d.val + 10));
+      .force('collision', d3.forceCollide<Node>().radius(d => d.val + 10));
 
     // Set initial transform to center the graph in the view
     const initialTransform = d3.zoomIdentity.translate(width / 2, height / 2).scale(0.9);

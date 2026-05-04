@@ -79,8 +79,9 @@ class AnalyzeRequest(BaseModel):
 
 @app.get("/api/health")
 def health_check():
-    """Endpoint untuk mengecek apakah server berjalan."""
-    return {"status": "ok", "message": "Omnius API is running."}
+    """Endpoint untuk mengecek apakah server berjalan dan melakukan pre-warming."""
+    logger.info("Health check ping received - App is warm.")
+    return {"status": "ok", "message": "Omnius API is running and warm."}
 
 
 @app.get("/api/models")
@@ -125,9 +126,38 @@ def analyze(request: AnalyzeRequest, _: None = Depends(verify_api_key)):
     try:
         pipeline = AnalysisPipeline(request.model)
         
-        def event_generator():
-            for event in pipeline.run_stream(providers):
-                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        import asyncio
+        from concurrent.futures import ThreadPoolExecutor
+
+        async def event_generator():
+            # Kita gunakan queue untuk menjembatani pipeline (sync) dengan generator (async)
+            queue = asyncio.Queue()
+            loop = asyncio.get_event_loop()
+            
+            def producer():
+                try:
+                    for event in pipeline.run_stream(providers):
+                        loop.call_soon_threadsafe(queue.put_nowait, event)
+                except Exception as e:
+                    logger.error(f"Error in pipeline producer: {e}")
+                    loop.call_soon_threadsafe(queue.put_nowait, {"status": "error", "message": str(e)})
+                finally:
+                    loop.call_soon_threadsafe(queue.put_nowait, None) # Sentinel
+
+            # Jalankan pipeline di thread terpisah agar tidak memblock event loop
+            executor = ThreadPoolExecutor(max_workers=1)
+            loop.run_in_executor(executor, producer)
+
+            while True:
+                try:
+                    # Tunggu event dengan timeout 15 detik untuk heartbeat
+                    event = await asyncio.wait_for(queue.get(), timeout=15.0)
+                    if event is None:
+                        break
+                    yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+                except asyncio.TimeoutError:
+                    # Kirim SSE comment sebagai heartbeat untuk mencegah Azure Load Balancer timeout
+                    yield ": keep-alive\n\n"
 
         from fastapi.responses import StreamingResponse
         return StreamingResponse(

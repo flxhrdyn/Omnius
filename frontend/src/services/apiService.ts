@@ -106,3 +106,17 @@ export async function researchNews(topic: string): Promise<any> {
 
   return response.json();
 }
+
+/**
+ * Mengirimkan ping ke endpoint health untuk membangunkan container Azure (Pre-warming).
+ */
+export async function pingHealth(): Promise<void> {
+  try {
+    await fetch(`${API_BASE_URL}/api/health`, {
+      headers: authHeaders(),
+    });
+    console.log('Backend pre-warming ping sent.');
+  } catch (error) {
+    console.warn('Failed to send pre-warming ping:', error);
+  }
+}

@@ -9,7 +9,16 @@ def test_health_check():
     """
     response = client.get("/api/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "message": "Omnius API is running."}
+    assert response.json() == {"status": "ok", "message": "Omnius API is running and warm."}
 
-# Kita hapus test_cors_unauthorized karena saat ini kita menggunakan kebijakan 
-# allowed_origins=["*"] yang mengizinkan semua akses demi kemudahan deployment.
+
+def test_analyze_unauthorized():
+    """Memastikan /api/analyze menolak request tanpa API key."""
+    response = client.post("/api/analyze", json={"articles": [], "model": "test"})
+    assert response.status_code == 401
+
+
+def test_research_unauthorized():
+    """Memastikan /api/research menolak request tanpa API key."""
+    response = client.post("/api/research", json={"topic": "test"})
+    assert response.status_code == 401
