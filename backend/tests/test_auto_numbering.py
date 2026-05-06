@@ -53,7 +53,7 @@ async def test_manual_articles_get_auto_numbered():
             mock_report.return_value = dummy_report
             
             # Jalankan stream (yang akan memicu numbering)
-            for event in pipeline.run_stream([p1, p2, p3]):
+            async for event in pipeline.run_stream([p1, p2, p3]):
                 pass
                 
             # Periksa argumen yang dikirim ke extract

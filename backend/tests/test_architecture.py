@@ -49,7 +49,8 @@ def test_article_provider_manual():
     assert text == "Isi berita manual"
     assert error is None
 
-def test_pipeline_streaming_logic():
+@pytest.mark.asyncio
+async def test_pipeline_streaming_logic():
     """
     Verifikasi bahwa AnalysisPipeline memancarkan event progress yang benar.
     """
@@ -79,7 +80,9 @@ def test_pipeline_streaming_logic():
                     ManualArticleProvider(title="A2", text="T2")
                 ]
                 
-                events = list(pipeline.run_stream(providers))
+                events = []
+                async for event in pipeline.run_stream(providers):
+                    events.append(event)
                 
                 status_types = [e["status"] for e in events]
                 assert "progress" in status_types
