@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Link2, FileText, Send, Loader2, LayoutDashboard, Settings, Info, Plus, Trash2, BrainCircuit, ChevronRight, CheckCircle2, History, Database, Globe, Cpu, Home, Zap, ShieldAlert, Search, Sparkles, Calendar } from 'lucide-react';
+import { Link2, FileText, Send, Loader2, LayoutDashboard, Settings, Info, Plus, X, Trash2, BrainCircuit, ChevronRight, CheckCircle2, History, Database, Globe, Cpu, Home, Zap, ShieldAlert, Search, Sparkles, Calendar } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { analyzeNews, researchNews } from '../services/apiService';
 import { AnalysisResult } from '../types';
@@ -27,6 +27,7 @@ export const AnalysisWorkspace: React.FC = () => {
   const [isResearching, setIsResearching] = useState(false);
   const [urlInputs, setUrlInputs] = useState<string[]>(['', '']);
   const [manualInputs, setManualInputs] = useState<string[]>(['', '']);
+  const [selectedResearchArticles, setSelectedResearchArticles] = useState<any[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [progressMsg, setProgressMsg] = useState('Initializing Analysis Engine...');
@@ -34,8 +35,11 @@ export const AnalysisWorkspace: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleAddInput = () => {
-    if (activeTab === 'manual') setManualInputs([...manualInputs, '']);
-    else setUrlInputs([...urlInputs, '']);
+    if (activeTab === 'manual') {
+      if (manualInputs.length < 3) setManualInputs([...manualInputs, '']);
+    } else if (activeTab === 'link') {
+      if (urlInputs.length < 3) setUrlInputs([...urlInputs, '']);
+    }
   };
 
   const handleRemoveInput = (index: number) => {
@@ -69,23 +73,34 @@ export const AnalysisWorkspace: React.FC = () => {
     }
   };
 
-  const useResearchArticle = (url: string) => {
-    // Cek jika sudah ada agar tidak duplikat di urlInputs
-    if (urlInputs.includes(url)) return;
-
-    // Cari input yang kosong atau tambah baru di urlInputs
-    const emptyIdx = urlInputs.findIndex(i => i.trim() === '');
-    if (emptyIdx !== -1) {
-      const newInputs = [...urlInputs];
-      newInputs[emptyIdx] = url;
-      setUrlInputs(newInputs);
+  const toggleResearchArticle = (article: any) => {
+    const isSelected = selectedResearchArticles.some(a => a.url === article.url);
+    if (isSelected) {
+      setSelectedResearchArticles(selectedResearchArticles.filter(a => a.url !== article.url));
     } else {
-      setUrlInputs([...urlInputs, url]);
+      if (selectedResearchArticles.length < 3) {
+        setSelectedResearchArticles([...selectedResearchArticles, article]);
+      } else {
+        setErrorMessage("Maksimal 3 artikel dapat dipilih untuk analisis.");
+      }
     }
   };
 
   const runAnalysis = async () => {
-    const currentInputs = activeTab === 'manual' ? manualInputs : urlInputs;
+    let currentInputs: string[] = [];
+    let mode: 'link' | 'manual' = 'link';
+
+    if (activeTab === 'research') {
+      currentInputs = selectedResearchArticles.map(a => a.url);
+      mode = 'link';
+    } else if (activeTab === 'manual') {
+      currentInputs = manualInputs;
+      mode = 'manual';
+    } else {
+      currentInputs = urlInputs;
+      mode = 'link';
+    }
+
     const validInputs = currentInputs.filter(i => i.trim() !== '');
     if (validInputs.length < 1) return;
 
@@ -95,7 +110,7 @@ export const AnalysisWorkspace: React.FC = () => {
     try {
       const data = await analyzeNews(
         validInputs,
-        activeTab === 'manual' ? 'manual' : 'link',
+        mode,
         selectedModel,
         (status) => {
           setProgressMsg(status.message);
@@ -378,16 +393,16 @@ export const AnalysisWorkspace: React.FC = () => {
                             <h3 className="text-xs font-black text-[#505050] uppercase tracking-[0.3em]">AI Recommendations</h3>
                             <div className="flex items-center gap-4">
                               <span className="text-[10px] text-emerald-500 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-full">FOUND {researchResults.length} ARTICLES</span>
-                              {urlInputs.filter(i => i.trim() !== '').length > 0 && (
+                              {selectedResearchArticles.length > 0 && (
                                 <span className="text-[10px] text-[#2A35D1] font-bold bg-[#2A35D1]/10 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                                  {urlInputs.filter(i => i.trim() !== '').length} SELECTED
+                                  {selectedResearchArticles.length} SELECTED
                                 </span>
                               )}
                             </div>
                           </div>
 
                           {/* Quick Analysis Trigger for Research Tab */}
-                          {urlInputs.filter(i => i.trim() !== '').length >= 1 && (
+                          {selectedResearchArticles.length >= 1 && (
                             <motion.div
                               initial={{ opacity: 0, y: 10 }}
                               animate={{ opacity: 1, y: 0 }}
@@ -395,7 +410,7 @@ export const AnalysisWorkspace: React.FC = () => {
                             >
                               <div className="space-y-1">
                                 <h4 className="text-sm font-bold text-white">Ready for Framing Analysis?</h4>
-                                <p className="text-xs text-[#808080]">Anda telah memilih {urlInputs.filter(i => i.trim() !== '').length} artikel. Mulai dekonstruksi narasi sekarang.</p>
+                                <p className="text-xs text-[#808080]">Anda telah memilih {selectedResearchArticles.length} artikel. Mulai dekonstruksi narasi sekarang.</p>
                               </div>
                               <button
                                 onClick={runAnalysis}
@@ -409,7 +424,7 @@ export const AnalysisWorkspace: React.FC = () => {
 
                           <div className="grid grid-cols-1 gap-4">
                             {researchResults.map((article, idx) => {
-                              const isAdded = urlInputs.includes(article.url);
+                              const isAdded = selectedResearchArticles.some(a => a.url === article.url);
                               return (
                                 <motion.div
                                   key={idx}
@@ -471,17 +486,16 @@ export const AnalysisWorkspace: React.FC = () => {
                                     </div>
 
                                     <button
-                                      onClick={() => useResearchArticle(article.url)}
-                                      disabled={isAdded}
+                                      onClick={() => toggleResearchArticle(article)}
                                       className={cn(
                                         "shrink-0 w-12 h-12 rounded-2xl transition-all flex items-center justify-center shadow-lg shadow-black/20",
                                         isAdded 
-                                          ? "bg-emerald-500 text-white cursor-default" 
+                                          ? "bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white border border-red-500/20" 
                                           : "bg-[#2A35D1]/10 text-[#2A35D1] hover:bg-[#2A35D1] hover:text-white"
                                       )}
-                                      title={isAdded ? "Sudah ditambahkan" : "Gunakan artikel ini untuk analisis"}
+                                      title={isAdded ? "Batal pilih" : "Gunakan artikel ini untuk analisis"}
                                     >
-                                      {isAdded ? <CheckCircle2 className="w-6 h-6" /> : <Plus className="w-6 h-6" />}
+                                      {isAdded ? <X className="w-6 h-6" /> : <Plus className="w-6 h-6" />}
                                     </button>
                                   </div>
                                 </motion.div>
@@ -537,16 +551,18 @@ export const AnalysisWorkspace: React.FC = () => {
                       )}
                     </motion.div>
                   ))}
-                  <motion.button
-                    layout
-                    onClick={handleAddInput}
-                    className="h-full min-h-[140px] rounded-3xl border-2 border-dashed border-white/10 flex flex-col items-center justify-center gap-3 text-[#A0A0A0] hover:text-[#2A35D1] hover:border-[#2A35D1]/30 transition-all bg-white/[0.01] hover:bg-[#2A35D1]/5 group/add"
-                  >
-                    <div className="w-12 h-12 rounded-full border border-dashed border-[#606060] group-hover/add:border-[#2A35D1] flex items-center justify-center transition-colors bg-[#11141C]">
-                      <Plus className="w-6 h-6" />
-                    </div>
-                    <span className="text-[11px] font-black uppercase tracking-[0.3em]">Add Source</span>
-                  </motion.button>
+                  {(activeTab === 'manual' ? manualInputs : urlInputs).length < 3 && (
+                    <motion.button
+                      layout
+                      onClick={handleAddInput}
+                      className="h-full min-h-[140px] rounded-3xl border-2 border-dashed border-white/10 flex flex-col items-center justify-center gap-3 text-[#A0A0A0] hover:text-[#2A35D1] hover:border-[#2A35D1]/30 transition-all bg-white/[0.01] hover:bg-[#2A35D1]/5 group/add"
+                    >
+                      <div className="w-12 h-12 rounded-full border border-dashed border-[#606060] group-hover/add:border-[#2A35D1] flex items-center justify-center transition-colors bg-[#11141C]">
+                        <Plus className="w-6 h-6" />
+                      </div>
+                      <span className="text-[11px] font-black uppercase tracking-[0.3em]">Add Source</span>
+                    </motion.button>
+                  )}
                 </div>
                 )}
 

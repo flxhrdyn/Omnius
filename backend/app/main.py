@@ -117,11 +117,14 @@ def analyze(request: AnalyzeRequest, _: None = Depends(verify_api_key)):
     # Langkah 3: Konversi data mentah menjadi ArticleProviders (Seam & Adapter)
     from app.services.providers import URLArticleProvider, ManualArticleProvider
     providers = []
+    manual_count = 0
     for art in articles_data:
         if art.get("url"):
             providers.append(URLArticleProvider(art["url"]))
         else:
-            providers.append(ManualArticleProvider(art.get("title", ""), art.get("text", "")))
+            manual_count += 1
+            fallback = f"Berita {manual_count}"
+            providers.append(ManualArticleProvider(art.get("title", ""), art.get("text", ""), fallback_title=fallback))
 
     try:
         pipeline = AnalysisPipeline(request.model)

@@ -25,11 +25,12 @@ class URLArticleProvider(ArticleProvider):
 
 class ManualArticleProvider(ArticleProvider):
     """Adapter untuk berita yang dimasukkan secara manual (Full Text)."""
-    def __init__(self, title: str, text: str):
+    def __init__(self, title: str, text: str, fallback_title: str = "Judul Manual"):
         self.title = title
         self.text = text
+        self.fallback_title = fallback_title
 
     def get_content(self) -> Tuple[str, str, Optional[str]]:
         if not self.text:
             return "", "", "Teks berita manual kosong."
-        return self.title or "Judul Manual", self.text, None
+        return self.title or self.fallback_title, self.text, None
