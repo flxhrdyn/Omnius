@@ -1,101 +1,82 @@
+import { API_BASE_URL, authHeaders } from './config';
+
 /**
- * API Service
- * Menggantikan geminiService.ts dengan pemanggilan ke FastAPI backend Python.
+ * Menjalankan analisis framing pada daftar artikel (URL atau Teks Manual).
  */
-
-import { AnalysisResult } from '../types';
-
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-const API_KEY = import.meta.env.VITE_API_KEY || '';
-
-/** Header yang dikirim ke setiap endpoint yang terproteksi. */
-const authHeaders = (): Record<string, string> => ({
-  'Content-Type': 'application/json',
-  ...(API_KEY ? { 'X-API-Key': API_KEY } : {}),
-});
-
-export interface ArticleInput {
-  url?: string;
-  title?: string;
-  text?: string;
-}
-
 export async function analyzeNews(
-  inputs: string[],
-  mode: 'link' | 'manual' = 'link',
-  model: string = 'llama-3.3-70b-versatile',
-  onStatus?: (status: { message: string, percent: number }) => void
-): Promise<AnalysisResult> {
-  const articles: ArticleInput[] = inputs.map((input) => {
-    if (mode === 'link') {
-      return { url: input };
-    } else {
-      return { text: input };
-    }
-  });
+  items: string[],
+  type: 'link' | 'manual',
+  model: string,
+  onStatusUpdate?: (status: { message: string; percent: number }) => void
+): Promise<any> {
+  const payload = {
+    items: items.map((item) => ({
+      type: type === 'link' ? 'url' : 'manual',
+      [type === 'link' ? 'url' : 'text']: item,
+    })),
+    model,
+  };
 
   const response = await fetch(`${API_BASE_URL}/api/analyze`, {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({ articles, model }),
+    body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
-    throw new Error(errorData.detail || `HTTP Error ${response.status}`);
+    const errorData = await response.json();
+    throw new Error(errorData.detail || 'Analysis failed');
   }
 
   const reader = response.body?.getReader();
   const decoder = new TextDecoder();
-  let resultData: AnalysisResult | null = null;
+  let analysisResult: any = null;
 
-  if (!reader) throw new Error("Gagal membaca stream dari server.");
+  if (!reader) throw new Error("Gagal membaca stream analisis.");
+
+  let buffer = '';
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
 
-    const chunk = decoder.decode(value, { stream: true });
-    const lines = chunk.split('\n');
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
 
     for (const line of lines) {
-      if (line.startsWith('data: ')) {
-        const jsonStr = line.replace('data: ', '').trim();
+      const trimmedLine = line.trim();
+      if (trimmedLine.startsWith('data: ')) {
+        const jsonStr = trimmedLine.replace('data: ', '').trim();
         if (!jsonStr) continue;
-        
-        let event;
-        try {
-          event = JSON.parse(jsonStr);
-        } catch (e) {
-          console.error("Error parsing SSE event:", e);
-          continue;
-        }
 
-        if (event.status === 'progress' && onStatus) {
-          onStatus({ message: event.message, percent: event.percent });
-        } else if (event.status === 'final_result') {
-          resultData = event.data;
-        } else if (event.status === 'error') {
-          throw new Error(event.message);
+        try {
+          const event = JSON.parse(jsonStr);
+          if (event.status === 'progress' && onStatusUpdate) {
+            onStatusUpdate({ message: event.message, percent: event.percent || 0 });
+          } else if (event.status === 'complete') {
+            analysisResult = event.data;
+          } else if (event.status === 'error') {
+            throw new Error(event.message);
+          }
+        } catch (e) {
+          console.error("Parse Error:", e);
         }
       }
     }
   }
 
-  if (!resultData) throw new Error("Analisis selesai tanpa hasil final.");
-  return resultData;
+  if (!analysisResult) throw new Error("Analisis selesai tanpa hasil.");
+  return analysisResult;
 }
 
-export async function getAvailableModels(): Promise<string[]> {
-  const response = await fetch(`${API_BASE_URL}/api/models`);
-  if (!response.ok) {
-    return ['llama-3.3-70b-versatile'];
-  }
-  const data = await response.json();
-  return data.models as string[];
-}
-
-export async function researchNews(topic: string): Promise<any> {
+/**
+ * Menjalankan riset agentic untuk mencari berita berdasarkan topik.
+ */
+export async function researchNews(
+  topic: string,
+  onProgress?: (msg: string) => void
+): Promise<any> {
   const response = await fetch(`${API_BASE_URL}/api/research`, {
     method: 'POST',
     headers: authHeaders(),
@@ -103,11 +84,50 @@ export async function researchNews(topic: string): Promise<any> {
   });
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
+    const errorData = await response.json();
     throw new Error(errorData.detail || 'Research failed');
   }
 
-  return response.json();
+  const reader = response.body?.getReader();
+  const decoder = new TextDecoder();
+  let finalData: any = null;
+
+  if (!reader) throw new Error("Gagal membaca stream riset.");
+
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      if (trimmedLine.startsWith('data: ')) {
+        const jsonStr = trimmedLine.replace('data: ', '').trim();
+        if (!jsonStr) continue;
+
+        try {
+          const event = JSON.parse(jsonStr);
+          if (event.status === 'progress' && onProgress) {
+            onProgress(event.message);
+          } else if (event.status === 'final_result') {
+            finalData = event.data;
+          } else if (event.status === 'error') {
+            throw new Error(event.message);
+          }
+        } catch (e) {
+          console.error("Parse Error:", e);
+        }
+      }
+    }
+  }
+
+  if (!finalData) throw new Error("Riset selesai tanpa hasil.");
+  return finalData;
 }
 
 /**
@@ -118,8 +138,7 @@ export async function pingHealth(): Promise<void> {
     await fetch(`${API_BASE_URL}/api/health`, {
       headers: authHeaders(),
     });
-    console.log('Backend pre-warming ping sent.');
   } catch (error) {
-    console.warn('Failed to send pre-warming ping:', error);
+    console.warn('Ping failed', error);
   }
 }

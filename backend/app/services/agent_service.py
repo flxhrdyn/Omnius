@@ -1,84 +1,150 @@
 import os
-from typing import List
+import datetime
+import logging
+import json
+import re
+from typing import List, Optional, Callable
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext
 from tavily import TavilyClient
 
-# Skema output untuk hasil pencarian agent
+# Konfigurasi Logging
+logger = logging.getLogger(__name__)
+
+# Skema output (SNAKE_CASE)
 class ResearchArticle(BaseModel):
-    """Informasi artikel yang ditemukan oleh agent."""
-    title: str = Field(description="Judul artikel berita")
-    source: str = Field(description="Nama sumber berita atau domain (misal: CNN Indonesia, BBC, etc.)")
-    url: str = Field(description="URL lengkap artikel")
-    snippet: str = Field(description="Potongan teks atau ringkasan singkat isi artikel")
-    reason: str = Field(description="Alasan mengapa agent memilih artikel ini untuk analisis framing")
-    publishedDate: str = Field(default="Unknown Date", description="Tanggal dan jam publikasi artikel (jika ada)")
+    title: str = Field(description="Judul berita")
+    source: str = Field(description="Nama sumber/domain")
+    url: str = Field(description="URL lengkap")
+    snippet: str = Field(description="Ringkasan singkat")
+    reason: str = Field(description="Alasan (Bahasa Indonesia)")
+    published_date: str = Field(default="Unknown Date")
 
 class ResearchResult(BaseModel):
-    """Daftar artikel hasil riset agent."""
-    articles: List[ResearchArticle] = Field(description="List 3-5 artikel terbaik yang ditemukan")
+    articles: List[ResearchArticle] = Field(description="Daftar artikel")
+    suggested_query: Optional[str] = Field(default=None)
+    is_fallback: bool = False
 
-# Inisialisasi PydanticAI Agent
-# Menggunakan awalan 'groq:' untuk integrasi native yang lebih simpel dan stabil
+class ResearchDeps:
+    def __init__(self):
+        self.verified_urls = set()
+        self.last_raw_results = []
+
+# Prompt yang dirampingkan
+SYSTEM_PROMPT = (
+    f"Anda adalah Research Assistant. Hari ini: {datetime.date.today().strftime('%d %b %Y')}\n"
+    "Tugas: Cari berita terbaru via tool. Gunakan Bahasa Indonesia untuk field 'reason'.\n"
+    "Aturan Ketat: Hanya pilih artikel yang BENAR-BENAR membahas topik utama secara langsung."
+)
+
 research_agent = Agent(
-    'groq:llama-3.3-70b-versatile',
+    'groq:llama-3.1-8b-instant',
+    deps_type=ResearchDeps,
     output_type=ResearchResult,
-    retries=3,
-    system_prompt=(
-        "Anda adalah News Research Assistant yang ahli dalam menemukan berita berkualitas tinggi "
-        "untuk analisis framing media menggunakan metodologi Robert Entman. "
-        "Tugas Anda adalah mencari artikel berita yang relevan dengan topik yang diberikan user. "
-        "\n\nAturan Pencarian:"
-        "\n1. Cari artikel dari sumber media yang kredibel. Identifikasi nama sumbernya (misal: Kompas, Tempo, Reuters)."
-        "\n2. PENTING: Anda harus memilih URL artikel berita INDIVIDUAL, bukan halaman kumpulan berita (tag, topic, category, atau collection pages)."
-        "\n3. Hindari URL yang mengandung '/tag/', '/topic/', '/category/', atau '/indeks/'. Pastikan URL merujuk langsung ke satu berita spesifik."
-        "\n4. Usahakan mencari perspektif atau narasi yang berbeda (misal: satu pro, satu kontra, atau dari media dengan latar belakang berbeda)."
-        "\n5. Hindari situs yang kemungkinan besar memiliki paywall atau sulit di-scrape."
-        "\n6. Sertakan tanggal publikasi (publishedDate) jika tersedia dari hasil pencarian. Format publishedDate menjadi format 'DD MMM YYYY' (Contoh: 20 Feb 2026)."
-        "\n7. Jika tanggal tidak tersedia secara eksplisit dari data tool, biarkan field tersebut sebagai 'Unknown Date'. Jangan menebak-nebak tanggal dari isi teks."
-        "\n8. Pilih minimal 2 dan maksimal 5 artikel terbaik."
-    ),
+    retries=2,
+    system_prompt=SYSTEM_PROMPT,
 )
 
 @research_agent.tool
-def search_tavily(ctx: RunContext[None], query: str) -> str:
-    """Mencari berita di internet menggunakan Tavily. 
-    Gunakan tool ini untuk mendapatkan list artikel terbaru berdasarkan topik.
-    """
+def search_tavily(ctx: RunContext[ResearchDeps], query: str) -> str:
+    """Mencari berita di internet menggunakan Tavily."""
     api_key = os.environ.get("TAVILY_API_KEY")
-    if not api_key:
-        return "Error: TAVILY_API_KEY tidak dikonfigurasi."
+    if not api_key: return "Error: API Key tidak ada."
     
     try:
         tavily = TavilyClient(api_key=api_key)
-        # Menggunakan topic="news" dan time_range="week" untuk hasil terbaru (1 minggu terakhir)
-        response = tavily.search(query=query, search_depth="advanced", topic="news", time_range="week", max_results=10)
+        response = tavily.search(query=query, search_depth="advanced", topic="news", time_range="month", max_results=6)
+        results = response.get("results", [])
         
-        # Format hasil agar mudah dibaca oleh LLM
-        results = []
-        for res in response.get("results", []):
-            pub_date = res.get('published_date') or "Not provided"
-            results.append(f"Title: {res.get('title')}\nURL: {res.get('url')}\nDate: {pub_date}\nSnippet: {res.get('content')[:400]}...\n---")
+        if results:
+            ctx.deps.last_raw_results = results
+            logger.info(f"Tavily returned {len(results)} results.")
         
-        return "\n".join(results) if results else "Tidak ditemukan hasil pencarian."
+        formatted = []
+        for res in results:
+            url = res.get('url', '').strip()
+            if url: ctx.deps.verified_urls.add(url)
+            formatted.append(f"T: {res.get('title')}\nU: {url}\nS: {res.get('content')[:300]}...\n---")
+        
+        return "\n".join(formatted) if formatted else "No results."
     except Exception as e:
-        return f"Terjadi kesalahan saat memanggil Tavily: {str(e)}"
+        logger.error(f"Tavily Error: {str(e)}")
+        return f"Error: {str(e)}"
 
-async def research_news_by_topic(topic: str) -> ResearchResult:
-    """Menjalankan agent untuk mencari berita berdasarkan topik."""
-    result = await research_agent.run(f"Cari berita terbaru mengenai topik ini: {topic}")
-    output = result.output
-
-    # Langkah 3: Deduplikasi hasil riset secara terprogram (Locality: Logika penyaringan ada di sini)
-    unique_articles = []
-    seen_urls = set()
-
-    for article in output.articles:
-        # Normalisasi URL: hapus trailing slash dan ubah ke lowercase untuk perbandingan
-        normalized_url = article.url.rstrip('/').lower()
-        if normalized_url not in seen_urls:
-            unique_articles.append(article)
-            seen_urls.add(normalized_url)
+def is_article_relevant(title: str, topic: str) -> bool:
+    """Pengecekan kata kunci sederhana untuk menghindari hasil 'nyasar' (misal: BBM vs Nikel)."""
+    keywords = re.findall(r'\w+', topic.lower())
+    # Filter kata umum
+    ignored = {'harga', 'kenaikan', 'indonesia', 'terbaru', 'update'}
+    essential_keywords = [k for k in keywords if k not in ignored and len(k) > 2]
     
-    output.articles = unique_articles
-    return output
+    if not essential_keywords: return True # Jika topik terlalu umum, skip filter
+    
+    title_lower = title.lower()
+    return any(k in title_lower for k in essential_keywords)
+
+async def research_news_by_topic(topic: str, on_progress: Optional[Callable[[str], None]] = None) -> ResearchResult:
+    deps = ResearchDeps()
+    all_verified_articles = []
+    seen_urls = set()
+    is_fallback_active = False
+    
+    # 1. Inisialisasi Data Awal
+    if on_progress: on_progress(f"Mencari informasi awal tentang: {topic}...")
+    try:
+        mock_ctx = RunContext(agent=research_agent, deps=deps, model=None, usage=None, prompt_messages=[])
+        search_tavily(mock_ctx, topic)
+    except Exception as e:
+        logger.error(f"Initial search failed: {str(e)}")
+    
+    # 2. Agentic Loop
+    current_query = topic
+    for attempt in range(1, 4):
+        msg = f"Percobaan riset {attempt}: {current_query}"
+        if on_progress: on_progress(msg)
+        
+        exclude_msg = f"\nExclude URLs: {list(seen_urls)}" if seen_urls else ""
+        try:
+            result = await research_agent.run(f"Topik: {current_query}. {exclude_msg}", deps=deps)
+            
+            new_articles = []
+            for article in result.output.articles:
+                clean_url = article.url.strip()
+                # Verifikasi URL ada di hasil Tavily
+                if any(clean_url.rstrip('/') == v_url.rstrip('/') for v_url in deps.verified_urls):
+                    # Verifikasi Relevansi Judul (Anti-Nikel-for-BBM)
+                    if is_article_relevant(article.title, topic):
+                        norm_url = clean_url.rstrip('/').lower()
+                        if norm_url not in seen_urls:
+                            new_articles.append(article)
+                            seen_urls.add(norm_url)
+                    else:
+                        logger.warning(f"Artikel ditolak karena tidak relevan: {article.title}")
+            
+            all_verified_articles.extend(new_articles)
+            if len(all_verified_articles) >= 3: break # Target 3 artikel berkualitas
+            if attempt < 3: current_query = result.output.suggested_query or f"{topic} terbaru"
+
+        except Exception as e:
+            logger.error(f"Attempt {attempt} failed: {str(e)}")
+            if attempt == 3: break
+            
+    # 3. LOGIKA FALLBACK (Agresif)
+    # Trigger fallback jika hasil kurang dari 2 atau tidak ada sama sekali
+    if len(all_verified_articles) < 2 and deps.last_raw_results:
+        is_fallback_active = True
+        if on_progress: on_progress("Hasil terbatas ditemukan. Menampilkan hasil pencarian relevan lainnya...")
+        
+        # Kosongkan list untuk diisi hasil mentah Tavily agar user dapat semua data
+        all_verified_articles = []
+        for res in deps.last_raw_results:
+            all_verified_articles.append(ResearchArticle(
+                title=res.get('title', 'No Title'),
+                source=res.get('url', '').split('/')[2] if res.get('url') else 'Source',
+                url=res.get('url', ''),
+                snippet=res.get('content', '')[:400] if res.get('content') else "No snippet available",
+                reason="Hasil pencarian otomatis (Cadangan)",
+                published_date=res.get('published_date') or "Unknown Date"
+            ))
+            
+    return ResearchResult(articles=all_verified_articles[:6], suggested_query=None, is_fallback=is_fallback_active)

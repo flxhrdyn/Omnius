@@ -7,10 +7,12 @@ dengan logika scraping dan analisis Groq di Python.
 import os
 import json
 import logging
+import asyncio
 from dotenv import load_dotenv, find_dotenv
 from fastapi import FastAPI, HTTPException, Request, Security, Depends
 from fastapi.security.api_key import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
 
@@ -33,158 +35,130 @@ app = FastAPI(
 )
 
 # ── CORS Configuration ───────────────────────────────────────────────────────
-# Baca dari env; fallback ke localhost saja (bukan wildcard) untuk keamanan.
-raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173")
+# Baca dari env; fallback ke localhost port 5173 dan 3000 untuk keamanan.
+raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000")
 allowed_origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
-# Selalu sertakan localhost untuk development
-if "http://localhost:5173" not in allowed_origins:
-    allowed_origins.append("http://localhost:5173")
+
+# Pastikan port development masuk dalam daftar
+for origin in ["http://localhost:5173", "http://localhost:3000"]:
+    if origin not in allowed_origins:
+        allowed_origins.append(origin)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["*"]
 )
 
-# ── API Key Protection ────────────────────────────────────────────────────────
+# ── API Key Security ────────────────────────────────────────────────────────
 API_KEY_NAME = "X-API-Key"
-_api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
-def verify_api_key(api_key: str = Security(_api_key_header)):
-    """Dependency: memastikan setiap request ke endpoint sensitif menyertakan API key yang valid."""
-    expected_key = os.getenv("OMNIUS_API_KEY")
-    # Jika OMNIUS_API_KEY tidak dikonfigurasi di environment, lewati pengecekan
-    # (berguna saat development lokal tanpa .env)
-    if not expected_key:
-        logger.warning("OMNIUS_API_KEY tidak dikonfigurasi. Endpoint tidak terproteksi!")
-        return
-    if api_key != expected_key:
-        raise HTTPException(status_code=401, detail="API key tidak valid atau tidak ditemukan.")
+async def get_api_key(api_key: str = Depends(api_key_header)):
+    master_key = os.getenv("OMNIUS_API_KEY")
+    if not master_key:
+        logger.warning("OMNIUS_API_KEY tidak dikonfigurasi di backend!")
+        return None
+    if api_key != master_key:
+        raise HTTPException(status_code=403, detail="Akses ditolak: API Key tidak valid.")
+    return api_key
 
-class ArticleInput(BaseModel):
-    """Input untuk satu artikel: bisa berupa URL atau teks manual."""
-    url: Optional[str] = None
-    title: Optional[str] = None
-    text: Optional[str] = None
-
-
-class AnalyzeRequest(BaseModel):
-    """Request body untuk endpoint analisis."""
-    articles: list[ArticleInput]
-    model: str = "llama-3.3-70b-versatile"
-
+# ── Endpoints ───────────────────────────────────────────────────────────────
 
 @app.get("/api/health")
-def health_check():
-    """Endpoint untuk mengecek apakah server berjalan dan melakukan pre-warming."""
-    logger.info("Health check ping received - App is warm.")
-    return {"status": "ok", "message": "Omnius API is running and warm."}
-
+async def health_check():
+    return {"status": "healthy", "service": "Omnius AI API"}
 
 @app.get("/api/models")
-def get_models():
-    """Mengembalikan daftar model Groq yang tersedia."""
+async def get_models():
     return {"models": AVAILABLE_MODELS}
 
+@app.post("/api/research")
+async def research_endpoint(request: ResearchRequest, api_key: str = Depends(get_api_key)):
+    """
+    Endpoint SSE untuk mencari berita berdasarkan topik dengan progress real-time.
+    """
+    async def event_generator():
+        try:
+            # Queue untuk menangkap progress dari agent
+            queue = asyncio.Queue()
+
+            def on_progress(msg: str):
+                queue.put_nowait(msg)
+
+            # Jalankan riset di background task
+            task = asyncio.create_task(research_news_by_topic(request.topic, on_progress=on_progress))
+
+            while not task.done() or not queue.empty():
+                try:
+                    # Ambil pesan dari queue dengan timeout singkat agar bisa mengecek status task
+                    msg = await asyncio.wait_for(queue.get(), timeout=0.1)
+                    yield f"data: {json.dumps({'status': 'progress', 'message': msg})}\n\n"
+                except asyncio.TimeoutError:
+                    continue
+
+            # Ambil hasil akhir
+            result = await task
+            # Konversi hasil ke skema response agar konsisten dengan frontend
+            from app.models.schemas import ResearchArticleSchema
+            articles_data = [
+                ResearchArticleSchema(
+                    title=a.title,
+                    source=a.source,
+                    url=a.url,
+                    snippet=a.snippet,
+                    reason=a.reason,
+                    publishedDate=a.published_date
+                ).model_dump() for a in result.articles
+            ]
+            
+            # DIAGNOSTIC LOG
+            logger.info(f"SSE sending final_result: {len(articles_data)} articles, isFallback: {result.is_fallback}")
+            
+            # Kirim flag isFallback ke frontend menggunakan status 'final_result' sesuai apiService.ts
+            yield f"data: {json.dumps({'status': 'final_result', 'data': {'articles': articles_data, 'isFallback': result.is_fallback}})}\n\n"
+
+        except Exception as e:
+            logger.exception("Gagal dalam proses riset")
+            yield f"data: {json.dumps({'status': 'error', 'message': str(e)})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 @app.post("/api/analyze")
-def analyze(request: AnalyzeRequest, _: None = Depends(verify_api_key)):
-    """Endpoint utama: menerima URL atau teks, mengembalikan hasil analisis framing.
-
-    Body JSON yang diharapkan:
-    {
-        "articles": [
-            {"url": "https://..."},
-            {"title": "Judul", "text": "Isi berita..."}
-        ],
-        "model": "llama-3.3-70b-versatile"
-    }
+async def analyze_news(request: Request, api_key: str = Depends(get_api_key)):
     """
-    if len(request.articles) < 2:
-        raise HTTPException(status_code=400, detail="Minimal 2 artikel harus diberikan untuk analisis komparatif.")
+    Menerima list URL atau Teks Manual dan menjalankan pipeline analisis framing.
+    """
+    data = await request.json()
+    items = data.get("items", [])
+    model_name = data.get("model", "llama-3.3-70b-versatile")
+    
+    if not items:
+        raise HTTPException(status_code=400, detail="Daftar artikel tidak boleh kosong.")
 
-    if request.model not in AVAILABLE_MODELS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Model '{request.model}' tidak tersedia. Pilih dari: {AVAILABLE_MODELS}",
-        )
-
-    articles_data = [article.model_dump(exclude_none=True) for article in request.articles]
-
-    # Langkah 3: Konversi data mentah menjadi ArticleProviders (Seam & Adapter)
     from app.services.providers import URLArticleProvider, ManualArticleProvider
+
     providers = []
-    manual_count = 0
-    for art in articles_data:
-        if art.get("url"):
-            providers.append(URLArticleProvider(art["url"]))
-        else:
-            manual_count += 1
-            fallback = f"Berita {manual_count}"
-            providers.append(ManualArticleProvider(art.get("title", ""), art.get("text", ""), fallback_title=fallback))
+    for item in items:
+        if item.get("type") == "url":
+            providers.append(URLArticleProvider(item["url"]))
+        elif item.get("type") == "manual":
+            providers.append(ManualArticleProvider(title=item.get("title"), text=item["text"]))
 
-    try:
-        pipeline = AnalysisPipeline(request.model)
-        
-        import asyncio
-        from concurrent.futures import ThreadPoolExecutor
+    pipeline = AnalysisPipeline(model_name=model_name)
+    
+    def event_generator():
+        try:
+            for event in pipeline.run_stream(providers):
+                yield f"data: {json.dumps(event)}\n\n"
+        except Exception as e:
+            logger.exception("Pipeline Error")
+            yield f"data: {json.dumps({'status': 'error', 'message': str(e)})}\n\n"
 
-        async def event_generator():
-            # Kita gunakan queue untuk menjembatani pipeline (sync) dengan generator (async)
-            queue = asyncio.Queue()
-            loop = asyncio.get_event_loop()
-            
-            def producer():
-                try:
-                    for event in pipeline.run_stream(providers):
-                        loop.call_soon_threadsafe(queue.put_nowait, event)
-                except Exception as e:
-                    logger.error(f"Error in pipeline producer: {e}")
-                    loop.call_soon_threadsafe(queue.put_nowait, {"status": "error", "message": str(e)})
-                finally:
-                    loop.call_soon_threadsafe(queue.put_nowait, None) # Sentinel
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
-            # Jalankan pipeline di thread terpisah agar tidak memblock event loop
-            executor = ThreadPoolExecutor(max_workers=1)
-            loop.run_in_executor(executor, producer)
-
-            while True:
-                try:
-                    # Tunggu event dengan timeout 15 detik untuk heartbeat
-                    event = await asyncio.wait_for(queue.get(), timeout=15.0)
-                    if event is None:
-                        break
-                    yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-                except asyncio.TimeoutError:
-                    # Kirim SSE comment sebagai heartbeat untuk mencegah Azure Load Balancer timeout
-                    yield ": keep-alive\n\n"
-
-        from fastapi.responses import StreamingResponse
-        return StreamingResponse(
-            event_generator(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "X-Accel-Buffering": "no",
-                "Connection": "keep-alive",
-            }
-        )
-
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Terjadi kesalahan internal: {str(e)}")
-
-
-@app.post("/api/research", response_model=ResearchResponse)
-async def research(request: ResearchRequest, _: None = Depends(verify_api_key)):
-    """Endpoint untuk mencari berita secara otomatis berdasarkan topik menggunakan Agentic AI."""
-    try:
-        result = await research_news_by_topic(request.topic)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gagal melakukan riset berita: {str(e)}")
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

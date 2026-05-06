@@ -33,4 +33,5 @@ class ManualArticleProvider(ArticleProvider):
     def get_content(self) -> Tuple[str, str, Optional[str]]:
         if not self.text:
             return "", "", "Teks berita manual kosong."
-        return self.title or self.fallback_title, self.text, None
+        # Mengembalikan string kosong jika judul tidak ada agar diproses penomoran otomatis oleh pipeline
+        return self.title or "", self.text, None

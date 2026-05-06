@@ -33,6 +33,8 @@ export const AnalysisWorkspace: React.FC = () => {
   const [progressMsg, setProgressMsg] = useState('Initializing Analysis Engine...');
   const [progress, setProgress] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [researchStatus, setResearchStatus] = useState<string | null>(null);
+  const [isFallback, setIsFallback] = useState(false);
 
   const handleAddInput = () => {
     if (activeTab === 'manual') {
@@ -63,11 +65,19 @@ export const AnalysisWorkspace: React.FC = () => {
     if (!researchTopic.trim()) return;
     setIsResearching(true);
     setErrorMessage(null);
+    setResearchStatus("Memulai riset agentic...");
+    setResearchResults([]);
+    
     try {
-      const data = await researchNews(researchTopic);
+      const data = await researchNews(researchTopic, (msg) => {
+        setResearchStatus(msg);
+      });
       setResearchResults(data.articles);
+      setIsFallback(data.isFallback || false);
+      setResearchStatus(null);
     } catch (error: any) {
       setErrorMessage(error.message);
+      setResearchStatus(null);
     } finally {
       setIsResearching(false);
     }
@@ -380,6 +390,20 @@ export const AnalysisWorkspace: React.FC = () => {
                           Cari Berita
                         </button>
                       </div>
+
+                      <AnimatePresence>
+                        {researchStatus && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0 }}
+                            className="mt-4 flex items-center gap-3 text-xs font-mono text-[#2A35D1] bg-[#2A35D1]/5 p-3 rounded-xl border border-[#2A35D1]/10"
+                          >
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            <span className="tracking-widest uppercase">{researchStatus}</span>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
 
                     <AnimatePresence>
@@ -389,6 +413,25 @@ export const AnalysisWorkspace: React.FC = () => {
                           animate={{ opacity: 1, height: 'auto' }}
                           className="space-y-6"
                         >
+                          {isFallback && (
+                            <motion.div 
+                              initial={{ opacity: 0, scale: 0.95 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl flex items-start gap-4 mb-6"
+                            >
+                              <div className="bg-amber-500/20 p-2 rounded-xl">
+                                <ShieldAlert className="w-5 h-5 text-amber-500" />
+                              </div>
+                              <div>
+                                <h4 className="text-sm font-bold text-amber-500">Hasil Tidak Spesifik</h4>
+                                <p className="text-[11px] text-[#808080] mt-1 leading-relaxed">
+                                  Sistem tidak menemukan berita yang benar-benar cocok dalam sebulan terakhir, 
+                                  namun berikut adalah hasil pencarian yang mungkin relevan bagi Anda.
+                                </p>
+                              </div>
+                            </motion.div>
+                          )}
+
                           <div className="flex items-center justify-between mb-2">
                             <h3 className="text-xs font-black text-[#505050] uppercase tracking-[0.3em]">AI Recommendations</h3>
                             <div className="flex items-center gap-4">
@@ -577,7 +620,13 @@ export const AnalysisWorkspace: React.FC = () => {
                   >
                     <div className="flex items-center gap-3">
                       {isAnalyzing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Cpu className="w-5 h-5 group-hover:rotate-12 transition-transform" />}
-                      {isAnalyzing ? "Menganalisis Framing..." : "Jalankan Analisis"}
+                      {isAnalyzing 
+                        ? "Menganalisis Framing..." 
+                        : activeTab === 'research' 
+                          ? "Analisis Hasil Riset" 
+                          : activeTab === 'manual' 
+                            ? "Analisis Teks Manual" 
+                            : "Analisis Daftar URL"}
                     </div>
                   </button>
                 </div>

@@ -1,35 +1,37 @@
-# PRD: Produksi & Stabilisasi Infrastruktur Omnius
+# PRD: Omnius Analysis & Research Stabilization (Fase 2)
 
 ## Problem Statement
-Pengguna (terutama pada tier **Azure Students**) mengalami masalah **Cold Start** yang menyebabkan aplikasi terasa "mati" atau sangat lambat saat pertama kali dibuka. Selain itu, proses analisis framing yang memakan waktu lama seringkali terputus di tengah jalan karena **Idle Timeout** (230 detik) pada Load Balancer Azure, sehingga hasil riset tidak muncul secara utuh.
+Meskipun infrastruktur dasar sudah stabil (Fase 1), pengguna masih menghadapi kendala pada kualitas data dan pengalaman pengguna (UX) saat melakukan analisis:
+1.  **AI Research Hallucination**: Agent sering memberikan URL berita yang tidak valid (404).
+2.  **Low Relevancy (Noise)**: Hasil pencarian seringkali menyertakan link yang tidak relevan (seperti sidebar berita populer).
+3.  **UI/UX Constraints**: Pengguna tidak bisa membatalkan (deselect) berita yang sudah dipilih, dan antrean riset seringkali bercampur secara membingungkan dengan antrean manual.
 
 ## Solution
-Mengimplementasikan strategi stabilisasi tiga lapis:
-1.  **Backend Stability**: Menambahkan SSE Heartbeat dan optimasi logging untuk menjaga koneksi tetap hidup.
-2.  **Frontend Pre-warming**: Membangunkan container Azure secara proaktif saat user pertama kali mendarat di landing page.
-3.  **Infrastructure Efficiency**: Mengecilkan ukuran image Docker menggunakan Multi-stage build untuk mempercepat waktu start-up.
+Meningkatkan kualitas pipeline riset dan analisis melalui:
+1.  **Hallucination Guardrails**: Verifikasi URL real-time terhadap data asli dari search engine (Tavily).
+2.  **Agentic Relevancy Filter**: Menginstruksikan Agent untuk melakukan audit snippet dan hanya memilih artikel di mana topik menjadi subjek utama.
+3.  **Decoupled Selection UX**: Memisahkan antrean seleksi untuk setiap metode input (Research, URL, Manual) agar kontrol lebih presisi.
+4.  **Auto-Numbering**: Memberikan identitas otomatis pada input teks manual yang tidak memiliki judul.
 
 ## User Stories
-1.  **Sebagai pengguna**, saya ingin aplikasi tetap responsif meskipun sudah lama tidak digunakan, sehingga saya tidak menganggap aplikasi rusak.
-2.  **Sebagai pengguna**, saya ingin proses analisis framing yang kompleks tidak terputus di tengah jalan, sehingga saya bisa mendapatkan laporan intelijen yang lengkap.
-3.  **Sebagai pengembang**, saya ingin dokumentasi keputusan arsitektur (ADR) tersedia dengan jelas, sehingga saya tidak bingung saat melakukan pemeliharaan di masa depan.
-4.  **Sebagai pengembang**, saya ingin image Docker sekecil mungkin, sehingga proses CI/CD dan deployment ke Azure ACR berjalan lebih cepat.
+1.  **Sebagai pengguna**, saya ingin sistem memverifikasi keaktifan link berita sebelum menampilkannya, agar saya terhindar dari link 404.
+2.  **Sebagai pengguna**, saya ingin bisa membatalkan pilihan artikel di tab riset dengan mudah (toggle `+`/`x`).
+3.  **Sebagai pengguna**, saya ingin input teks manual saya otomatis diberi judul (misal: "Berita 1") jika saya lupa memberikannya.
+4.  **Sebagai pengguna**, saya ingin membatasi analisis maksimal 3 artikel untuk menjaga fokus dan performa.
 
-## Implementation Decisions
-*   **Heartbeat Mechanism**: Backend FastAPI akan mengirimkan komentar `: keep-alive` setiap 15 detik pada stream SSE jika tidak ada data baru yang dikirim. (Status: **Selesai**)
-*   **Pre-warming Strategy**: Frontend React akan memanggil `GET /api/health` secara asinkron (non-blocking) pada saat *initial mount* komponen utama. (Status: **Selesai**)
-*   **Docker Optimization**: Mengadopsi **Multi-stage build** di Dockerfile untuk memisahkan tahap kompilasi/dependensi dengan tahap runtime, mengurangi ukuran image akhir secara signifikan. (Status: **Selesai**)
-*   **Security Enforcement**: Mempertahankan `X-API-Key` sebagai satu-satunya metode otentikasi antar-layanan (Netlify ke Azure). (Status: **Selesai**)
+## Implementation Decisions (Fase 2)
+*   **Verified URL Guardrail**: Implementasi pengecekan di `agent_service.py` di mana URL Agent harus merupakan substring dari output asli tool.
+*   **Decoupled Frontend State**: Menggunakan state `selectedResearchArticles` yang terpisah dari `urlInputs`.
+*   **Toggle Logic UI**: Mengubah tombol seleksi menjadi interaktif (Select/Deselect).
+*   **Independent Analysis Trigger**: Tombol "Jalankan Analisis" di setiap tab hanya memproses antrean spesifik dari tab tersebut.
+*   **Auto-Titling**: Fallback judul dinamis di `ManualArticleProvider`.
 
 ## Testing Decisions
-*   **SSE Stability Test**: Melakukan simulasi analisis yang memakan waktu > 4 menit untuk memastikan koneksi tidak terputus.
-*   **Cold Start Latency Measurement**: Mengukur waktu respons request pertama setelah container dimatikan secara manual (idle simulation).
-*   **Image Size Audit**: Memastikan image akhir di ACR tidak mengandung dependensi build (seperti `build-essential` atau `git`).
+*   **Guardrail Unit Test**: Memverifikasi pemfilteran URL halusinasi.
+*   **UX Toggle Test**: Memastikan penambahan dan penghapusan artikel di antrean riset berjalan sinkron dengan UI.
+*   **Limit Enforcement Test**: Memastikan sistem menolak seleksi lebih dari 3 artikel.
 
 ## Out of Scope
-*   Migrasi ke plan Azure berbayar (B1 atau lebih tinggi).
-*   Implementasi Redis atau sistem caching database (untuk saat ini).
-*   Optimasi performa model LLM itu sendiri (karena menggunakan API Groq eksternal).
-
-## Further Notes
-Implementasi ini ditujukan khusus untuk mengoptimalkan resource gratis pada Azure Students agar memiliki User Experience yang setara dengan infrastruktur produksi profesional.
+*   Migrasi infrastruktur Azure (sudah selesai di Fase 1).
+*   Implementasi sistem caching Redis.
+*   Optimasi internal LLM Groq.

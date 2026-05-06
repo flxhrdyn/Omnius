@@ -61,3 +61,4 @@ class ResearchArticleSchema(BaseModel):
 class ResearchResponse(BaseModel):
     """Respons API berisi list artikel hasil riset agent."""
     articles: List[ResearchArticleSchema]
+    isFallback: bool = False

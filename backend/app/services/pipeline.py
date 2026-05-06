@@ -33,7 +33,9 @@ class AnalysisPipeline:
         
         results = []
         for i, provider in enumerate(providers):
-            # Simulasi langkah untuk setiap artikel
+            # Inject temporary ID untuk auto-numbering jika judul kosong
+            setattr(provider, 'temp_id', f"Berita {i+1}")
+            
             source_info = getattr(provider, 'url', f"Artikel {i+1}")
             yield {"status": "progress", "message": f"Sedang menganalisis framing: {source_info}", "percent": 10 + (i * 20)}
             
@@ -123,10 +125,13 @@ class AnalysisPipeline:
             if not text:
                 return None, "Teks berita kosong."
 
+            # Auto-numbering jika judul kosong
+            final_title = title or getattr(provider, 'temp_id', "Berita")
+            
             # Kita asumsikan URL ada di provider jika tipenya URLArticleProvider
             url = getattr(provider, 'url', "")
             
-            result = self.extractor.extract(text, title=title, url=url)
+            result = self.extractor.extract(text, title=final_title, url=url)
             return result, None
 
         except Exception as e:
