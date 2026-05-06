@@ -1,49 +1,42 @@
-# PRD: Agentic Research Hardening & UX Stabilization
+# PRD: Smart Reranking Research Agent (Stabilization)
 
 ## Problem Statement
-Sistem riset berita saat ini rentan terhadap halusinasi AI (URL palsu/mati), kurang transparan dalam proses pencarian (user tidak tahu apa yang dilakukan Agent), dan memiliki kontrol seleksi yang membingungkan karena antrean artikel yang bercampur antar metode input.
+Sistem riset sebelumnya yang berbasis *Multi-turn Reasoning* terbukti tidak stabil untuk model kecil seperti Llama 3.1 8B. Masalah utama meliputi halusinasi URL, kegagalan pemanggilan tool (400 Bad Request) akibat akumulasi konteks, serta ketidakakuratan pemilihan berita (misal: berita Nikel muncul untuk topik BBM). Pengguna membutuhkan sistem yang cepat, deterministik, namun tetap cerdas dalam membedah konten berita.
 
 ## Solution
-Mentransformasi riset berita menjadi **Agentic Assistant** yang deterministik. Sistem akan melakukan pencarian iteratif (Multi-turn Loop), memvalidasi setiap URL secara fisik terhadap hasil mentah search engine, memberikan progres real-time melalui SSE, dan memisahkan antrean seleksi untuk kontrol pengguna yang maksimal.
+Mengganti logika penalaran bebas menjadi alur **Deterministic Reranking** terstruktur. Sistem akan menarik pool berita yang lebih luas dari Tavily (10 hasil), lalu menggunakan LLM sebagai "Judge" untuk memberikan skor relevansi dan memilih artikel terbaik berdasarkan konten, bukan hanya berdasarkan skor mesin pencari.
 
 ## User Stories
-1. Sebagai analis, saya ingin Agent melakukan pencarian ulang secara otomatis jika hasil awal tidak relevan, sehingga saya mendapatkan data berkualitas tanpa input manual tambahan.
-2. Sebagai analis, saya ingin melihat progres langkah demi langkah Agent ("Mencari...", "Mencoba kueri lain...") agar saya tahu sistem sedang bekerja dan tidak macet.
-3. Sebagai analis, saya ingin jaminan bahwa setiap link berita yang diberikan Agent adalah link asli yang aktif, bukan karangan AI.
-4. Sebagai analis, saya ingin ringkasan alasan pemilihan berita dalam Bahasa Indonesia, namun tetap melihat potongan berita asli dalam bahasa sumbernya untuk menjaga integritas informasi.
-5. Sebagai analis, saya ingin antrean berita hasil riset terpisah dari daftar URL manual saya, agar saya bisa memilih dengan presisi artikel mana yang akan masuk ke tahap framing.
-6. Sebagai analis, saya ingin input teks manual saya otomatis diberi nomor jika saya lupa memberi judul, agar laporan akhir tetap rapi.
+1. As a researcher, I want a faster search process so that I don't waste time waiting for repetitive AI reasoning loops.
+2. As a researcher, I want to see articles that are contextually relevant even if they have low search engine rankings, so I can discover hidden insights.
+3. As a researcher, I want to see a relevance score for each article, so I can quickly prioritize which ones to analyze.
+4. As a researcher, I want the system to automatically try a different search query if the first attempt yields no relevant results.
+5. As a researcher, I want a guaranteed fallback to raw search results if the AI fails to find perfect matches, so I never lose access to data.
 
 ## Implementation Decisions
 
-### 1. Agentic Loop & Multi-turn Strategy
-- **Iterasi Maksimal**: 3 kali percobaan pencarian.
-- **Multi-turn Reasoning**: Agent diwajibkan menyarankan kueri alternatif jika hasil pada iterasi saat ini kurang dari kuota (2 artikel).
-- **Soft-Filtering (Attempt 3)**: Pada percobaan terakhir, Agent diinstruksikan untuk menurunkan standar relevansi guna menghindari daftar kosong, namun tetap jujur memberikan catatan jika artikel adalah "pilihan terbaik yang tersedia".
+### 1. Smart Reranker Architecture
+- **Single-Turn First**: Sistem melakukan pencarian kueri awal (10 hasil) dan langsung melakukan reranking dalam satu kali panggil LLM.
+- **Content-Based Scoring**: LLM mengevaluasi Judul + Snippet (~300 karakter) dan memberikan skor relevansi (0-10).
+- **Two-Attempt Limit**: Jika Attempt 1 menghasilkan < 2 artikel berkualitas (skor > 7), Agent akan menggunakan kueri saran LLM untuk mencoba Attempt 2.
+- **Stateless Loop**: Setiap attempt bersifat independen tanpa menyimpan riwayat pesan untuk menghemat token dan menghindari rate limit.
 
-### 2. Guardrails & Honesty
-- **Deterministic URL Verification**: Kode sistem akan melakukan *cross-check* setiap URL Agent terhadap daftar URL mentah dari Tavily API. URL yang tidak cocok akan dibuang secara otomatis sebelum sampai ke User.
-- **Date Awareness**: System prompt menyertakan tanggal hari ini (`today()`) untuk memberikan konteks temporal yang akurat bagi Agent.
-- **Honesty Instruction**: Instruksi ketat melarang Agent memalsukan tanggal atau mengarang artikel jika data tidak ditemukan.
+### 2. Schema & API Changes
+- **ResearchArticle**: Menambahkan field `relevance_score` (int) untuk indikator kualitas di UI.
+- **Fallback Trigger**: Fallback otomatis aktif jika total artikel berkualitas dari semua attempt tetap di bawah ambang batas (threshold).
 
-### 3. Language & Output Policy
-- **Snippet (Potongan Berita)**: Harus dipertahankan dalam **bahasa asli** sumber (misal: Inggris) untuk menghindari bias terjemahan pada data mentah.
-- **Reason (Alasan Pemilihan)**: Disajikan dalam **Bahasa Indonesia** untuk kenyamanan analisis cepat.
-- **Final Analysis (Framing Report)**: Seluruh narasi laporan dalam **Bahasa Indonesia**, kecuali field teknis (Actors, Keyword Matrix, Sensitive Keywords).
-
-### 4. Technical Constraints
-- **Model**: Groq `llama-3.1-8b-instant` (High speed, low latency).
-- **Search Provider**: Tavily API dengan parameter `search_depth="advanced"`, `topic="news"`, dan `time_range="month"`.
-- **Progress Tracking**: Menggunakan SSE (Server-Sent Events) untuk mengirim pesan status dari Agent ke UI.
-
-### 5. UX Stabilization
-- **Decoupled Selection**: Memisahkan state seleksi untuk tab Research, URL, dan Manual.
-- **Auto-Numbering**: Logika backend untuk memberikan judul otomatis ("Berita 1", "Berita 2") jika input manual tidak memiliki judul.
+### 3. Verification & Safety
+- **Manual Initial Search**: Sistem selalu melakukan pencarian mentah di awal untuk memastikan data cadangan (fallback) selalu siap di memori.
+- **Strict URL Guardrails**: Tetap melakukan verifikasi URL terhadap hasil asli Tavily untuk mencegah halusinasi.
 
 ## Testing Decisions
-- **Loop Testing**: Unit test menggunakan mock untuk mensimulasikan kegagalan pencarian dan memverifikasi bahwa Agent melakukan retry dengan kueri yang berbeda.
-- **Guardrail Testing**: Verifikasi bahwa URL halusinasi dibuang oleh sistem deteksi URL.
+- **Relevancy Tests**: Memastikan berita yang tidak nyambung (seperti Nickel untuk BBM) mendapatkan skor rendah dan difilter.
+- **Latency Monitoring**: Memastikan 1 attempt selesai dalam waktu di bawah 5-8 detik.
+- **Integration Test**: Memastikan frontend React dapat menampilkan skor relevansi dan flag fallback secara visual.
 
 ## Out of Scope
-- Pencarian video atau konten media sosial (fokus tetap pada portal berita).
-- Analisis sentimen real-time selama proses riset (analisis dilakukan di tahap framing).
+- Penarikan konten berita lengkap (full-text) selama fase riset (tetap berbasis snippet).
+- Penambahan provider pencarian selain Tavily.
+
+## Further Notes
+Strategi ini mengalihkan beban kerja LLM dari "mencari cara untuk mendapatkan data" menjadi "menilai data yang sudah didapatkan", yang jauh lebih cocok untuk model 8B.

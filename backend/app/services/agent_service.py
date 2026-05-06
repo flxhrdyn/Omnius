@@ -2,7 +2,6 @@ import os
 import datetime
 import logging
 import json
-import re
 from typing import List, Optional, Callable
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext
@@ -30,18 +29,18 @@ class ResearchDeps:
         self.verified_urls = set()
         self.last_raw_results = []
 
-# Prompt yang dirampingkan
+# Prompt yang sangat ringkas untuk kecepatan
 SYSTEM_PROMPT = (
-    f"Anda adalah Research Assistant. Hari ini: {datetime.date.today().strftime('%d %b %Y')}\n"
-    "Tugas: Cari berita terbaru via tool. Gunakan Bahasa Indonesia untuk field 'reason'.\n"
-    "Aturan Ketat: Hanya pilih artikel yang BENAR-BENAR membahas topik utama secara langsung."
+    f"Anda adalah News Assistant ({datetime.date.today()}).\n"
+    "Cari berita terbaru via tool. Gunakan Bahasa Indonesia untuk field 'reason'.\n"
+    "PENTING: Hanya berikan URL yang benar-benar ada di hasil pencarian."
 )
 
 research_agent = Agent(
     'groq:llama-3.1-8b-instant',
     deps_type=ResearchDeps,
     output_type=ResearchResult,
-    retries=2,
+    retries=1,
     system_prompt=SYSTEM_PROMPT,
 )
 
@@ -53,35 +52,21 @@ def search_tavily(ctx: RunContext[ResearchDeps], query: str) -> str:
     
     try:
         tavily = TavilyClient(api_key=api_key)
-        response = tavily.search(query=query, search_depth="advanced", topic="news", time_range="month", max_results=6)
+        # Ambil 5 hasil saja agar cepat
+        response = tavily.search(query=query, search_depth="advanced", topic="news", time_range="month", max_results=5)
         results = response.get("results", [])
         
         if results:
             ctx.deps.last_raw_results = results
-            logger.info(f"Tavily returned {len(results)} results.")
+            for res in results:
+                url = res.get('url', '').strip()
+                if url: ctx.deps.verified_urls.add(url)
         
-        formatted = []
-        for res in results:
-            url = res.get('url', '').strip()
-            if url: ctx.deps.verified_urls.add(url)
-            formatted.append(f"T: {res.get('title')}\nU: {url}\nS: {res.get('content')[:300]}...\n---")
-        
-        return "\n".join(formatted) if formatted else "No results."
+        formatted = [f"T: {r.get('title')}\nU: {r.get('url')}\nS: {r.get('content')[:200]}..." for r in results]
+        return "\n---\n".join(formatted) if formatted else "No results."
     except Exception as e:
         logger.error(f"Tavily Error: {str(e)}")
-        return f"Error: {str(e)}"
-
-def is_article_relevant(title: str, topic: str) -> bool:
-    """Pengecekan kata kunci sederhana untuk menghindari hasil 'nyasar' (misal: BBM vs Nikel)."""
-    keywords = re.findall(r'\w+', topic.lower())
-    # Filter kata umum
-    ignored = {'harga', 'kenaikan', 'indonesia', 'terbaru', 'update'}
-    essential_keywords = [k for k in keywords if k not in ignored and len(k) > 2]
-    
-    if not essential_keywords: return True # Jika topik terlalu umum, skip filter
-    
-    title_lower = title.lower()
-    return any(k in title_lower for k in essential_keywords)
+        return "Gagal mencari berita."
 
 async def research_news_by_topic(topic: str, on_progress: Optional[Callable[[str], None]] = None) -> ResearchResult:
     deps = ResearchDeps()
@@ -89,62 +74,45 @@ async def research_news_by_topic(topic: str, on_progress: Optional[Callable[[str
     seen_urls = set()
     is_fallback_active = False
     
-    # 1. Inisialisasi Data Awal
-    if on_progress: on_progress(f"Mencari informasi awal tentang: {topic}...")
-    try:
-        mock_ctx = RunContext(agent=research_agent, deps=deps, model=None, usage=None, prompt_messages=[])
-        search_tavily(mock_ctx, topic)
-    except Exception as e:
-        logger.error(f"Initial search failed: {str(e)}")
-    
-    # 2. Agentic Loop
+    # Percobaan dikurangi menjadi 2 agar lebih cepat
     current_query = topic
-    for attempt in range(1, 4):
-        msg = f"Percobaan riset {attempt}: {current_query}"
+    for attempt in range(1, 3):
+        msg = f"Riset ({attempt}/2): {current_query}"
         if on_progress: on_progress(msg)
         
-        exclude_msg = f"\nExclude URLs: {list(seen_urls)}" if seen_urls else ""
         try:
-            result = await research_agent.run(f"Topik: {current_query}. {exclude_msg}", deps=deps)
+            # Gunakan mode stateless tanpa history
+            result = await research_agent.run(f"Cari: {current_query}", deps=deps)
             
-            new_articles = []
             for article in result.output.articles:
                 clean_url = article.url.strip()
-                # Verifikasi URL ada di hasil Tavily
+                # Cek verifikasi URL sederhana
                 if any(clean_url.rstrip('/') == v_url.rstrip('/') for v_url in deps.verified_urls):
-                    # Verifikasi Relevansi Judul (Anti-Nikel-for-BBM)
-                    if is_article_relevant(article.title, topic):
-                        norm_url = clean_url.rstrip('/').lower()
-                        if norm_url not in seen_urls:
-                            new_articles.append(article)
-                            seen_urls.add(norm_url)
-                    else:
-                        logger.warning(f"Artikel ditolak karena tidak relevan: {article.title}")
+                    norm_url = clean_url.rstrip('/').lower()
+                    if norm_url not in seen_urls:
+                        all_verified_articles.append(article)
+                        seen_urls.add(norm_url)
             
-            all_verified_articles.extend(new_articles)
-            if len(all_verified_articles) >= 3: break # Target 3 artikel berkualitas
-            if attempt < 3: current_query = result.output.suggested_query or f"{topic} terbaru"
+            if len(all_verified_articles) >= 2: break
+            current_query = f"{topic} terbaru"
 
         except Exception as e:
-            logger.error(f"Attempt {attempt} failed: {str(e)}")
-            if attempt == 3: break
+            logger.error(f"Attempt {attempt} error: {str(e)}")
+            if attempt == 2: break
             
-    # 3. LOGIKA FALLBACK (Agresif)
-    # Trigger fallback jika hasil kurang dari 2 atau tidak ada sama sekali
-    if len(all_verified_articles) < 2 and deps.last_raw_results:
+    # FALLBACK: Jika Agent gagal, tampilkan hasil mentah Tavily apa adanya
+    if not all_verified_articles and deps.last_raw_results:
         is_fallback_active = True
-        if on_progress: on_progress("Hasil terbatas ditemukan. Menampilkan hasil pencarian relevan lainnya...")
+        if on_progress: on_progress("Menampilkan hasil pencarian cadangan...")
         
-        # Kosongkan list untuk diisi hasil mentah Tavily agar user dapat semua data
-        all_verified_articles = []
         for res in deps.last_raw_results:
             all_verified_articles.append(ResearchArticle(
-                title=res.get('title', 'No Title'),
-                source=res.get('url', '').split('/')[2] if res.get('url') else 'Source',
+                title=res.get('title', 'Berita'),
+                source=res.get('url', '').split('/')[2] if res.get('url') else 'Sumber',
                 url=res.get('url', ''),
-                snippet=res.get('content', '')[:400] if res.get('content') else "No snippet available",
-                reason="Hasil pencarian otomatis (Cadangan)",
-                published_date=res.get('published_date') or "Unknown Date"
+                snippet=res.get('content', '')[:300],
+                reason="Hasil pencarian otomatis (Fallback)",
+                published_date=res.get('published_date') or "Baru saja"
             ))
             
-    return ResearchResult(articles=all_verified_articles[:6], suggested_query=None, is_fallback=is_fallback_active)
+    return ResearchResult(articles=all_verified_articles[:5], suggested_query=None, is_fallback=is_fallback_active)

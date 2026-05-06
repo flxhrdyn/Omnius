@@ -54,7 +54,7 @@ export async function analyzeNews(
           const event = JSON.parse(jsonStr);
           if (event.status === 'progress' && onStatusUpdate) {
             onStatusUpdate({ message: event.message, percent: event.percent || 0 });
-          } else if (event.status === 'complete') {
+          } else if (event.status === 'final_result') {
             analysisResult = event.data;
           } else if (event.status === 'error') {
             throw new Error(event.message);
