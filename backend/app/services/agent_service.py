@@ -72,7 +72,6 @@ def _execute_tavily_search(deps: ResearchDeps, query: str) -> str:
         formatted = []
         for i, res in enumerate(results):
             date = res.get('published_date', 'Unknown Date')
-            # Sertakan Tanggal (D) dalam konteks untuk LLM
             formatted.append(f"[{i}] T: {res.get('title')}\nD: {date}\nU: {res.get('url')}\nS: {res.get('content')[:350]}...\n---")
         
         return "\n".join(formatted) if formatted else "No results."
@@ -111,10 +110,20 @@ async def research_news_by_topic(topic: str, on_progress: Optional[Callable[[str
                 deps=deps
             )
             
+            # Step 3: Verifikasi dan Koleksi
             valid_this_turn = []
             for article in result.output.articles:
                 clean_url = article.url.strip()
-                if any(clean_url.rstrip('/') == v_url.rstrip('/') for v_url in deps.verified_urls):
+                # URL Guardrail & Matching to Original Content
+                match_url = next((u for u in deps.verified_urls if clean_url.rstrip('/') == u.rstrip('/')), None)
+                
+                if match_url:
+                    # Kembalikan snippet asli dari Tavily agar tidak ada distorsi/hallucination
+                    raw_res = deps.raw_results_pool.get(match_url)
+                    if raw_res:
+                        article.snippet = raw_res.get('content', article.snippet)
+                        article.title = raw_res.get('title', article.title)
+                    
                     norm_url = clean_url.rstrip('/').lower()
                     if norm_url not in seen_urls and article.relevance_score >= 5:
                         valid_this_turn.append(article)
@@ -145,7 +154,7 @@ async def research_news_by_topic(topic: str, on_progress: Optional[Callable[[str
                     title=res.get('title', 'Berita'),
                     source=url.split('/')[2] if '/' in url else 'Sumber',
                     url=url,
-                    snippet=res.get('content', '')[:350],
+                    snippet=res.get('content', '')[:400],
                     reason="Hasil pencarian otomatis (Cadangan)",
                     published_date=res.get('published_date') or "Unknown Date",
                     relevance_score=5
