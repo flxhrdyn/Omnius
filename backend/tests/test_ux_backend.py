@@ -79,3 +79,24 @@ def test_analyze_manual_numbering_integration():
             # Berita 3 (Manual 2 tanpa judul -> Berita 3)
             t3, _, _ = captured_providers[2].get_content()
             assert t3 == "Berita 3"
+
+def test_pipeline_captures_specific_error():
+    """
+    Memastikan AnalysisPipeline._process_single_article mengembalikan error message saat gagal.
+    """
+    from app.services.pipeline import AnalysisPipeline
+    from app.services.providers import ManualArticleProvider
+    
+    pipeline = AnalysisPipeline(model_name="test-model")
+    
+    # Mock extractor agar melempar error
+    pipeline.extractor = MagicMock()
+    pipeline.extractor.extract.side_effect = Exception("Rate limit exceeded")
+    
+    provider = ManualArticleProvider(title="Test", text="Isi")
+    
+    # Kita ingin interface baru mengembalikan (result, error_msg)
+    res, error_msg = pipeline._process_single_article_with_error(provider)
+    
+    assert res is None
+    assert "Rate limit exceeded" in error_msg

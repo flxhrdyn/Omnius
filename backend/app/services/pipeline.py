@@ -35,14 +35,15 @@ class AnalysisPipeline:
         for i, provider in enumerate(providers):
             # Simulasi langkah untuk setiap artikel
             source_info = getattr(provider, 'url', f"Artikel {i+1}")
-            yield {"status": "progress", "message": f"Sedang mengambil konten: {source_info}", "percent": 10 + (i * 20)}
+            yield {"status": "progress", "message": f"Sedang menganalisis framing: {source_info}", "percent": 10 + (i * 20)}
             
-            res = self._process_single_article(provider)
+            res, error_detail = self._process_single_article_with_error(provider)
             if res:
                 results.append(res)
-                yield {"status": "progress", "message": f"Analisis framing selesai: {res.source}", "percent": 25 + (i * 20)}
+                yield {"status": "progress", "message": f"Berhasil dianalisis: {res.source}", "percent": 25 + (i * 20)}
             else:
-                yield {"status": "progress", "message": f"Peringatan: Gagal memproses {source_info}", "percent": 25 + (i * 20)}
+                error_msg = f"Gagal memproses {source_info}: {error_detail}" if error_detail else f"Gagal memproses {source_info}"
+                yield {"status": "progress", "message": f"Peringatan: {error_msg}", "percent": 25 + (i * 20)}
 
         valid_analyses = [res for res in results if res is not None]
         
@@ -102,23 +103,34 @@ class AnalysisPipeline:
 
     def _process_single_article(self, provider: ArticleProvider) -> NewsAnalysisModel | None:
         """
+        Versi wrapper untuk kompatibilitas ke belakang.
+        """
+        res, _ = self._process_single_article_with_error(provider)
+        return res
+
+    def _process_single_article_with_error(self, provider: ArticleProvider) -> Tuple[NewsAnalysisModel | None, str | None]:
+        """
         Logika pemrosesan satu unit artikel menggunakan provider.
+        Mengembalikan tuple: (Hasil Analisis, Pesan Error jika gagal)
         """
         try:
             title, text, error = provider.get_content()
             
             if error:
                 logger.error(f"Gagal mendapatkan konten: {error}")
-                return None
+                return None, str(error)
 
             if not text:
-                return None
+                return None, "Teks berita kosong."
 
             # Kita asumsikan URL ada di provider jika tipenya URLArticleProvider
             url = getattr(provider, 'url', "")
             
-            return self.extractor.extract(text, title=title, url=url)
+            result = self.extractor.extract(text, title=title, url=url)
+            return result, None
 
         except Exception as e:
-            logger.exception(f"Gagal memproses artikel: {str(e)}")
-            return None
+            error_msg = str(e)
+            logger.exception(f"Gagal memproses artikel: {error_msg}")
+            # Jika ini adalah RetryError dari tenacity, ambil pesan aslinya jika mungkin
+            return None, error_msg

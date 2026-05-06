@@ -63,17 +63,20 @@ export async function analyzeNews(
         const jsonStr = line.replace('data: ', '').trim();
         if (!jsonStr) continue;
         
+        let event;
         try {
-          const event = JSON.parse(jsonStr);
-          if (event.status === 'progress' && onStatus) {
-            onStatus({ message: event.message, percent: event.percent });
-          } else if (event.status === 'final_result') {
-            resultData = event.data;
-          } else if (event.status === 'error') {
-            throw new Error(event.message);
-          }
+          event = JSON.parse(jsonStr);
         } catch (e) {
           console.error("Error parsing SSE event:", e);
+          continue;
+        }
+
+        if (event.status === 'progress' && onStatus) {
+          onStatus({ message: event.message, percent: event.percent });
+        } else if (event.status === 'final_result') {
+          resultData = event.data;
+        } else if (event.status === 'error') {
+          throw new Error(event.message);
         }
       }
     }
