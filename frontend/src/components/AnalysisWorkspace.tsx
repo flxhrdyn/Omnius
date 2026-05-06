@@ -411,8 +411,43 @@ export const AnalysisWorkspace: React.FC = () => {
                         <motion.div
                           initial={{ opacity: 0, height: 0 }}
                           animate={{ opacity: 1, height: 'auto' }}
-                          className="space-y-6"
+                          className="space-y-6 relative"
                         >
+                          {/* Analysis Progress Overlay */}
+                          {isAnalyzing && (
+                            <motion.div
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              className="absolute inset-0 z-50 flex items-center justify-center bg-[#080A0E]/80 backdrop-blur-md rounded-3xl"
+                            >
+                              <div className="flex flex-col items-center gap-6 max-w-md text-center p-8">
+                                <div className="relative">
+                                  <div className="w-20 h-20 rounded-full border-2 border-[#2A35D1]/20 border-t-[#2A35D1] animate-spin" />
+                                  <Cpu className="w-8 h-8 text-[#2A35D1] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                                </div>
+                                <div className="space-y-2">
+                                  <h3 className="text-xl font-bold text-white">AI Analyzing Naratives...</h3>
+                                  <p className={cn(
+                                    "text-sm font-mono tracking-tight",
+                                    progressMsg?.includes('Peringatan') ? "text-amber-400" : "text-[#2A35D1]"
+                                  )}>
+                                    {progressMsg || 'Memulai dekonstruksi framing...'}
+                                  </p>
+                                </div>
+                                
+                                {/* Progress Bar */}
+                                <div className="w-64 h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
+                                  <motion.div
+                                    className="h-full bg-gradient-to-r from-[#2A35D1] to-blue-400"
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${progress}%` }}
+                                    transition={{ duration: 0.5 }}
+                                  />
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+
                           {isFallback && (
                             <motion.div 
                               initial={{ opacity: 0, scale: 0.95 }}

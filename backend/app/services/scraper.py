@@ -1,4 +1,5 @@
 import requests
+import logging
 import re
 import os
 from concurrent.futures import ThreadPoolExecutor
@@ -7,6 +8,8 @@ from tavily import TavilyClient
 from bs4 import BeautifulSoup
 
 from app.core.config import MAX_ARTICLE_WORDS
+
+logger = logging.getLogger(__name__)
 
 
 # Header HTTP yang meniru perilaku browser sungguhan.
@@ -101,32 +104,48 @@ def scrape_article(url: str) -> tuple[str, str, str | None]:
         return title, article_text, None
 
     except (requests.exceptions.RequestException, Exception) as e:
-        # Fallback ke Tavily jika request standar gagal atau ditolak (misal: 403 atau 404)
+        # Retry logic for trailing slash mismatch before falling back to Tavily
+        if isinstance(e, requests.exceptions.HTTPError) and e.response.status_code in [403, 404]:
+            alt_url = url.strip()
+            alt_url = alt_url[:-1] if alt_url.endswith('/') else alt_url + '/'
+            try:
+                logger.info(f"Retrying with alternative URL: {alt_url}")
+                session = requests.Session()
+                response = session.get(alt_url, headers=_BROWSER_HEADERS, timeout=15)
+                response.raise_for_status()
+                soup = BeautifulSoup(response.text, "html.parser")
+                title = _extract_title(soup)
+                article_text = _extract_body(soup)
+                if article_text.strip() and len(article_text.split()) >= 30:
+                    return title, article_text, None
+            except:
+                pass
+
+        # Fallback ke Tavily jika request standar gagal atau ditolak
         api_key = os.environ.get("TAVILY_API_KEY")
         if api_key:
             try:
+                logger.info(f"Attempting Tavily content extraction for: {url}")
                 tavily = TavilyClient(api_key=api_key)
-                # Gunakan search dengan include_content untuk mendapatkan isi artikel
-                # (Tavily memiliki sistem scraping yang lebih canggih untuk melewati bot protection)
-                tv_res = tavily.search(query=url, search_depth="advanced", include_content=True, max_results=1)
                 
-                if tv_res and tv_res.get("results"):
-                    best_match = tv_res["results"][0]
-                    content = best_match.get("content", "")
-                    title = best_match.get("title", "Judul dari Tavily")
+                # Gunakan metode extract yang lebih canggih untuk mendapatkan isi artikel secara langsung
+                extract_res = tavily.extract(urls=[url])
+                
+                if extract_res and extract_res.get("results"):
+                    best_match = extract_res["results"][0]
+                    content = best_match.get("raw_content") or best_match.get("content", "")
                     
                     if len(content.split()) > 50:
+                        logger.info(f"Tavily extraction successful for: {url}")
+                        # Judul mungkin tidak ada di extract, gunakan fallback judul dari URL
+                        title = best_match.get("title") or url.split('/')[-1].replace('-', ' ').title()
                         return title, content, None
-            except:
-                pass # Jika Tavily juga gagal, lanjut ke error message original
+                    else:
+                        logger.warning(f"Tavily extraction returned too little content for: {url}")
+            except Exception as tv_e:
+                logger.error(f"Tavily Fallback failed: {str(tv_e)}")
 
-        if isinstance(e, requests.exceptions.HTTPError):
-            msg = f"Situs menolak akses (HTTP {e.response.status_code}). Silakan gunakan opsi input teks manual."
-        elif isinstance(e, requests.exceptions.RequestException):
-            msg = f"Gagal terhubung ke URL. Periksa koneksi atau gunakan opsi input teks manual."
-        else:
-            msg = f"Kesalahan sistem saat scraping: {str(e)}. Disarankan menggunakan input teks manual."
-        
+        msg = f"Situs menolak akses ({str(e)}). Silakan gunakan opsi input teks manual."
         return "Gagal Ekstraksi", "", msg
 
 

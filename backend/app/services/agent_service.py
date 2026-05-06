@@ -118,13 +118,14 @@ async def research_news_by_topic(topic: str, on_progress: Optional[Callable[[str
                 match_url = next((u for u in deps.verified_urls if clean_url.rstrip('/') == u.rstrip('/')), None)
                 
                 if match_url:
-                    # Kembalikan snippet asli dari Tavily agar tidak ada distorsi/hallucination
+                    # Kembalikan URL asli, judul, dan snippet dari Tavily agar 100% akurat untuk scraper
                     raw_res = deps.raw_results_pool.get(match_url)
                     if raw_res:
+                        article.url = match_url # Pastikan URL persis seperti aslinya (misal: masalah trailing slash)
                         article.snippet = raw_res.get('content', article.snippet)
                         article.title = raw_res.get('title', article.title)
                     
-                    norm_url = clean_url.rstrip('/').lower()
+                    norm_url = article.url.rstrip('/').lower()
                     if norm_url not in seen_urls and article.relevance_score >= 5:
                         valid_this_turn.append(article)
                         seen_urls.add(norm_url)

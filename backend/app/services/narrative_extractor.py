@@ -1,9 +1,12 @@
 import os
 import json
+import logging
 from groq import Groq, APIError, RateLimitError
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
 from app.models.schemas import NewsAnalysisModel
 from app.core.config import FRAMING_SYSTEM_PROMPT
+
+logger = logging.getLogger(__name__)
 
 class NarrativeExtractor:
     """

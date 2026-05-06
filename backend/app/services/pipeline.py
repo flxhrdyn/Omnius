@@ -45,12 +45,16 @@ class AnalysisPipeline:
                 yield {"status": "progress", "message": f"Berhasil dianalisis: {res.source}", "percent": 25 + (i * 20)}
             else:
                 error_msg = f"Gagal memproses {source_info}: {error_detail}" if error_detail else f"Gagal memproses {source_info}"
+                logger.error(f"PIPELINE ERROR [{source_info}]: {error_detail}")
                 yield {"status": "progress", "message": f"Peringatan: {error_msg}", "percent": 25 + (i * 20)}
 
         valid_analyses = [res for res in results if res is not None]
+        logger.info(f"Analisis selesai: {len(valid_analyses)} dari {len(providers)} artikel berhasil diproses.")
         
         if len(valid_analyses) < 2:
-            yield {"status": "error", "message": "Minimal 2 artikel harus berhasil diproses."}
+            error_msg = f"Minimal 2 artikel harus berhasil diproses. Hanya {len(valid_analyses)} yang berhasil."
+            logger.error(error_msg)
+            yield {"status": "error", "message": error_msg}
             return
 
         # 3. Generate Comparative Report
