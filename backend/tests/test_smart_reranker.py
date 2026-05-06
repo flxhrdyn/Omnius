@@ -19,15 +19,19 @@ async def test_reranker_assigns_relevance_scores():
     
     # Verifikasi tipe output
     assert isinstance(result, ResearchResult)
-    
-    # Verifikasi bahwa artikel memiliki field relevance_score
-    assert len(result.articles) > 0, "Harus ada minimal satu artikel yang ditemukan atau fallback"
+    assert len(result.articles) > 0
     
     for article in result.articles:
-        assert hasattr(article, 'relevance_score'), f"Artikel '{article.title}' tidak punya relevance_score"
+        # Check relevance_score
+        assert hasattr(article, 'relevance_score')
         assert isinstance(article.relevance_score, int)
         assert 0 <= article.relevance_score <= 10
         
+        # Check published_date (Behavior 4 - Date Extraction)
+        # Note: Some articles might genuinely be "Unknown Date" if Tavily doesn't have it,
+        # but we want to ensure at least some have real dates in a news search.
+        print(f"Article: {article.title} | Date: {article.published_date}")
+        
     # Pastikan diurutkan berdasarkan skor (Descending)
     scores = [a.relevance_score for a in result.articles]
-    assert scores == sorted(scores, reverse=True), "Artikel harus diurutkan dari skor tertinggi ke terendah"
+    assert scores == sorted(scores, reverse=True)

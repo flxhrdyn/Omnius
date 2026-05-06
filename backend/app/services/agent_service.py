@@ -18,7 +18,7 @@ class ResearchArticle(BaseModel):
     url: str = Field(description="URL lengkap")
     snippet: str = Field(description="Ringkasan singkat")
     reason: str = Field(description="Alasan singkat mengapa artikel ini relevan")
-    published_date: str = Field(default="Unknown Date")
+    published_date: str = Field(description="Tanggal publikasi (ekstrak dari data input jika tersedia)")
     relevance_score: int = Field(description="Skor relevansi (0-10) berdasarkan kecocokan konten dengan topik", ge=0, le=10)
 
 class ResearchResult(BaseModel):
@@ -37,9 +37,10 @@ SYSTEM_PROMPT = (
     "Tugas: Evaluasi daftar berita yang diberikan dan pilih yang paling relevan dengan topik.\n"
     "Aturan:\n"
     "1. Berikan skor 0-10 (10=Sangat Relevan, 0=Tidak Relevan).\n"
-    "2. Gunakan Bahasa Indonesia untuk field 'reason'.\n"
-    "3. Jika hasil kurang dari 3 yang relevan (skor > 7), berikan kueri baru yang lebih spesifik di field 'suggested_query'.\n"
-    "4. DILARANG mengarang URL. Gunakan hanya URL yang tersedia di data input."
+    "2. Ekstrak 'published_date' dari data input. Jika tidak ada, gunakan 'Unknown Date'.\n"
+    "3. Gunakan Bahasa Indonesia untuk field 'reason'.\n"
+    "4. Jika hasil kurang dari 3 yang relevan (skor > 7), berikan kueri baru yang lebih spesifik di field 'suggested_query'.\n"
+    "5. DILARANG mengarang URL. Gunakan hanya URL yang tersedia di data input."
 )
 
 research_agent = Agent(
@@ -70,7 +71,9 @@ def _execute_tavily_search(deps: ResearchDeps, query: str) -> str:
         
         formatted = []
         for i, res in enumerate(results):
-            formatted.append(f"[{i}] T: {res.get('title')}\nU: {res.get('url')}\nS: {res.get('content')[:350]}...\n---")
+            date = res.get('published_date', 'Unknown Date')
+            # Sertakan Tanggal (D) dalam konteks untuk LLM
+            formatted.append(f"[{i}] T: {res.get('title')}\nD: {date}\nU: {res.get('url')}\nS: {res.get('content')[:350]}...\n---")
         
         return "\n".join(formatted) if formatted else "No results."
     except Exception as e:
@@ -95,7 +98,6 @@ async def research_news_by_topic(topic: str, on_progress: Optional[Callable[[str
         logger.info(msg)
         
         try:
-            # Step 1: Jalankan pencarian via fungsi internal
             search_data = _execute_tavily_search(deps, current_query)
             
             if "No results" in search_data or "Error:" in search_data:
@@ -104,13 +106,11 @@ async def research_news_by_topic(topic: str, on_progress: Optional[Callable[[str
                     continue
                 else: break
 
-            # Step 2: Minta Agent melakukan Reranking
             result = await research_agent.run(
                 f"Topik: {topic}\n\nData Berita:\n{search_data}",
                 deps=deps
             )
             
-            # Step 3: Verifikasi dan Koleksi
             valid_this_turn = []
             for article in result.output.articles:
                 clean_url = article.url.strip()
@@ -138,7 +138,6 @@ async def research_news_by_topic(topic: str, on_progress: Optional[Callable[[str
         is_fallback_active = True
         if on_progress: on_progress("Mengaktifkan mode pencarian cadangan...")
         
-        # Tambahkan semua hasil mentah yang belum masuk ke list final
         for url, res in deps.raw_results_pool.items():
             norm_url = url.rstrip('/').lower()
             if norm_url not in seen_urls:
@@ -148,7 +147,7 @@ async def research_news_by_topic(topic: str, on_progress: Optional[Callable[[str
                     url=url,
                     snippet=res.get('content', '')[:350],
                     reason="Hasil pencarian otomatis (Cadangan)",
-                    published_date=res.get('published_date') or "Baru",
+                    published_date=res.get('published_date') or "Unknown Date",
                     relevance_score=5
                 ))
                 seen_urls.add(norm_url)
