@@ -24,19 +24,20 @@ def test_manual_article_auto_numbering():
     
     mock_pipeline = MagicMock()
     # Simulasi stream event
-    mock_pipeline.run_stream.return_value = [
-        {"status": "progress", "message": "Menganalisis Berita 1", "percent": 10},
-        {"status": "progress", "message": "Menganalisis Berita 2", "percent": 50},
-        {"status": "final_result", "data": {}}
-    ]
+    async def mock_run_stream(providers):
+        yield {"status": "progress", "message": "Menganalisis Berita 1", "percent": 10}
+        yield {"status": "progress", "message": "Menganalisis Berita 2", "percent": 50}
+        yield {"status": "final_result", "data": {}}
+    
+    mock_pipeline.run_stream.side_effect = mock_run_stream
     
     with patch("app.main.AnalysisPipeline", return_value=mock_pipeline):
         response = client.post(
             "/api/analyze",
             json={
-                "articles": [
-                    {"text": "Isi berita pertama"},
-                    {"text": "Isi berita kedua"}
+                "items": [
+                    {"type": "manual", "text": "Isi berita pertama"},
+                    {"type": "manual", "text": "Isi berita kedua"}
                 ],
                 "model": "llama-3.3-70b-versatile"
             },
@@ -57,18 +58,19 @@ def test_error_propagation_sse():
     from unittest.mock import patch, MagicMock
     
     mock_pipeline = MagicMock()
-    mock_pipeline.run_stream.return_value = [
-        {"status": "progress", "message": "Memulai...", "percent": 5},
-        {"status": "error", "message": "Rate limit Groq terlampaui"}
-    ]
+    async def mock_error_stream(providers):
+        yield {"status": "progress", "message": "Memulai...", "percent": 5}
+        yield {"status": "error", "message": "Rate limit Groq terlampaui"}
+    
+    mock_pipeline.run_stream.side_effect = mock_error_stream
     
     with patch("app.main.AnalysisPipeline", return_value=mock_pipeline):
         response = client.post(
             "/api/analyze",
             json={
-                "articles": [
-                    {"url": "https://example.com/1"},
-                    {"url": "https://example.com/2"}
+                "items": [
+                    {"type": "url", "url": "https://example.com/1"},
+                    {"type": "url", "url": "https://example.com/2"}
                 ]
             },
             headers=HEADERS

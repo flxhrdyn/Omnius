@@ -16,20 +16,29 @@ async def test_research_filters_hallucinated_urls():
         title="Berita Asli", 
         source="CNN", 
         url="https://cnn.com/real", 
-        snippet="...", reason="...", publishedDate="..."
+        snippet="...", reason="...", 
+        published_date="...",
+        relevance_score=9
     )
     article_fake = ResearchArticle(
         title="Berita Palsu", 
         source="Hoax", 
         url="https://hoax.com/fake", 
-        snippet="...", reason="...", publishedDate="..."
+        snippet="...", reason="...", 
+        published_date="...",
+        relevance_score=3
     )
     
     result = MagicMock()
     result.output = ResearchResult(articles=[article_real, article_fake], suggested_query=None)
     
-    with patch("app.services.agent_service.research_agent.run", new_callable=AsyncMock) as mock_run:
+    with patch("app.services.agent_service.research_agent.run", new_callable=AsyncMock) as mock_run, \
+         patch("app.services.agent_service._execute_tavily_search") as mock_tavily:
+        
         mock_run.return_value = result
+        mock_tavily.return_value = [
+            {"url": "https://cnn.com/real", "title": "Real A", "content": "Content Real"}
+        ]
         
         # Hanya daftarkan URL asli di verified_urls
         with patch("app.services.agent_service.ResearchDeps") as mock_deps_class:

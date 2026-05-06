@@ -25,7 +25,7 @@ class AnalysisPipeline:
         self.model_name = model_name
         self.extractor = NarrativeExtractor(model_name)
 
-    def run_stream(self, providers: List[ArticleProvider]):
+    async def run_stream(self, providers: List[ArticleProvider]):
         """
         Versi streaming dari pipeline yang mengirimkan progress secara real-time.
         """

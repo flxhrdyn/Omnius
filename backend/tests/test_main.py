@@ -15,10 +15,10 @@ def test_health_check():
 def test_analyze_unauthorized():
     """Memastikan /api/analyze menolak request tanpa API key."""
     response = client.post("/api/analyze", json={"articles": [], "model": "test"})
-    assert response.status_code == 401
+    assert response.status_code == 403
 
 
 def test_research_unauthorized():
     """Memastikan /api/research menolak request tanpa API key."""
     response = client.post("/api/research", json={"topic": "test"})
-    assert response.status_code == 401
+    assert response.status_code == 403

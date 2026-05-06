@@ -23,7 +23,8 @@ async def test_research_loops_until_quota_met():
         url="https://news-a.com/1", 
         snippet="Snippet 1", 
         reason="Reason 1",
-        publishedDate="01 May 2026"
+        published_date="01 May 2026",
+        relevance_score=9
     )
     article2 = ResearchArticle(
         title="Berita 2", 
@@ -31,19 +32,30 @@ async def test_research_loops_until_quota_met():
         url="https://news-b.com/2", 
         snippet="Snippet 2", 
         reason="Reason 2",
-        publishedDate="02 May 2026"
+        published_date="02 May 2026",
+        relevance_score=8
     )
     result2 = MagicMock()
     result2.output = ResearchResult(articles=[article1, article2], suggested_query=None)
     
-    # Patching research_agent.run
-    with patch("app.services.agent_service.research_agent.run", new_callable=AsyncMock) as mock_run:
+    # Patching research_agent.run and _execute_tavily_search
+    with patch("app.services.agent_service.research_agent.run", new_callable=AsyncMock) as mock_run, \
+         patch("app.services.agent_service._execute_tavily_search") as mock_tavily:
+        
         mock_run.side_effect = [result1, result2]
+        mock_tavily.return_value = [
+            {"url": "https://news-a.com/1", "title": "Tavily A", "content": "Content A"},
+            {"url": "https://news-b.com/2", "title": "Tavily B", "content": "Content B"}
+        ]
         
         # Patching verified_urls di deps agar URL dianggap valid
         with patch("app.services.agent_service.ResearchDeps") as mock_deps_class:
             mock_deps = MagicMock()
             mock_deps.verified_urls = {"https://news-a.com/1", "https://news-b.com/2"}
+            mock_deps.raw_results_pool = {
+                "https://news-a.com/1": {"title": "Berita 1", "content": "Content A"},
+                "https://news-b.com/2": {"title": "Berita 2", "content": "Content B"}
+            }
             mock_deps_class.return_value = mock_deps
             
             # Eksekusi

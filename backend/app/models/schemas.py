@@ -56,6 +56,7 @@ class ResearchArticleSchema(BaseModel):
     snippet: str
     reason: str
     publishedDate: Optional[str] = None
+    relevanceScore: int = 0
 
 
 class ResearchResponse(BaseModel):

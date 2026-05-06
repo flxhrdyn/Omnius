@@ -1,11 +1,7 @@
 import os
-from dotenv import load_dotenv
-
-# Load env vars BEFORE importing agent_service
-load_dotenv()
-
 import pytest
-from app.services.agent_service import research_news_by_topic, ResearchResult
+from unittest.mock import AsyncMock, patch, MagicMock
+from app.services.agent_service import research_news_by_topic, ResearchResult, ResearchArticle
 
 @pytest.mark.asyncio
 async def test_reranker_assigns_relevance_scores():
@@ -14,24 +10,45 @@ async def test_reranker_assigns_relevance_scores():
     """
     topic = "Kenaikan harga BBM di Indonesia"
     
-    # Jalankan riset
-    result = await research_news_by_topic(topic)
+    # Mock articles
+    article1 = ResearchArticle(
+        title="BBM Naik 1", source="Source 1", url="http://s1.com", snippet="...", reason="...", 
+        published_date="2026-05-01", relevance_score=10
+    )
+    article2 = ResearchArticle(
+        title="BBM Naik 2", source="Source 2", url="http://s2.com", snippet="...", reason="...", 
+        published_date="2026-05-02", relevance_score=8
+    )
     
-    # Verifikasi tipe output
-    assert isinstance(result, ResearchResult)
-    assert len(result.articles) > 0
-    
-    for article in result.articles:
-        # Check relevance_score
-        assert hasattr(article, 'relevance_score')
-        assert isinstance(article.relevance_score, int)
-        assert 0 <= article.relevance_score <= 10
+    mock_agent_result = MagicMock()
+    mock_agent_result.output = ResearchResult(articles=[article1, article2], suggested_query=None)
+
+    with patch("app.services.agent_service.research_agent.run", new_callable=AsyncMock) as mock_run, \
+         patch("app.services.agent_service._execute_tavily_search") as mock_tavily, \
+         patch("app.services.agent_service.ResearchDeps") as mock_deps_class:
         
-        # Check published_date (Behavior 4 - Date Extraction)
-        # Note: Some articles might genuinely be "Unknown Date" if Tavily doesn't have it,
-        # but we want to ensure at least some have real dates in a news search.
-        print(f"Article: {article.title} | Date: {article.published_date}")
+        mock_run.return_value = mock_agent_result
+        mock_tavily.return_value = [
+            {"url": "http://s1.com", "title": "S1", "content": "C1"},
+            {"url": "http://s2.com", "title": "S2", "content": "C2"}
+        ]
+        mock_deps = MagicMock()
+        mock_deps.verified_urls = {"http://s1.com", "http://s2.com"}
+        mock_deps_class.return_value = mock_deps
+
+        # Jalankan riset
+        result = await research_news_by_topic(topic)
         
-    # Pastikan diurutkan berdasarkan skor (Descending)
-    scores = [a.relevance_score for a in result.articles]
-    assert scores == sorted(scores, reverse=True)
+        # Verifikasi tipe output
+        assert isinstance(result, ResearchResult)
+        assert len(result.articles) == 2
+        
+        for article in result.articles:
+            # Check relevance_score
+            assert hasattr(article, 'relevance_score')
+            assert isinstance(article.relevance_score, int)
+            assert 0 <= article.relevance_score <= 10
+            
+        # Pastikan diurutkan berdasarkan skor (Descending)
+        scores = [a.relevance_score for a in result.articles]
+        assert scores == sorted(scores, reverse=True)

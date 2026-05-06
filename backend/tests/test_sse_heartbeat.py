@@ -15,20 +15,19 @@ async def test_analyze_sse_heartbeat():
     """
     mock_pipeline = MagicMock()
     
-    def slow_generator(providers):
-        import time
+    async def slow_generator(providers):
         # Kirim satu event awal
         yield {"status": "progress", "message": "Starting...", "percent": 0}
-        # Simulasi delay dengan tidak mengirim apa pun lagi segera (menggunakan time.sleep karena di thread)
-        time.sleep(0.5) 
+        # Simulasi delay agar heartbeat terpicu
+        await asyncio.sleep(0.5) 
         yield {"status": "final_result", "data": {}}
 
     mock_pipeline.run_stream.side_effect = slow_generator
 
     request_data = {
-        "articles": [
-            {"url": "https://test1.com"},
-            {"url": "https://test2.com"}
+        "items": [
+            {"type": "url", "url": "https://test1.com"},
+            {"type": "url", "url": "https://test2.com"}
         ],
         "model": "llama-3.3-70b-versatile"
     }

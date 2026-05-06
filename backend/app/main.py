@@ -69,7 +69,7 @@ async def get_api_key(api_key: str = Depends(api_key_header)):
 
 @app.get("/api/health")
 async def health_check():
-    return {"status": "healthy", "service": "Omnius AI API"}
+    return {"status": "ok", "message": "Omnius API is running and warm."}
 
 @app.get("/api/models")
 async def get_models():
@@ -93,11 +93,11 @@ async def research_endpoint(request: ResearchRequest, api_key: str = Depends(get
 
             while not task.done() or not queue.empty():
                 try:
-                    # Ambil pesan dari queue dengan timeout singkat agar bisa mengecek status task
-                    msg = await asyncio.wait_for(queue.get(), timeout=0.1)
+                    # Ambil pesan dari queue dengan timeout singkat agar bisa memberikan heartbeat
+                    msg = await asyncio.wait_for(queue.get(), timeout=15.0)
                     yield f"data: {json.dumps({'status': 'progress', 'message': msg})}\n\n"
                 except asyncio.TimeoutError:
-                    continue
+                    yield ": keep-alive\n\n"
 
             # Ambil hasil akhir
             result = await task
@@ -110,7 +110,8 @@ async def research_endpoint(request: ResearchRequest, api_key: str = Depends(get
                     url=a.url,
                     snippet=a.snippet,
                     reason=a.reason,
-                    publishedDate=a.published_date
+                    publishedDate=a.published_date,
+                    relevanceScore=a.relevance_score
                 ).model_dump() for a in result.articles
             ]
             
@@ -149,10 +150,17 @@ async def analyze_news(request: Request, api_key: str = Depends(get_api_key)):
 
     pipeline = AnalysisPipeline(model_name=model_name)
     
-    def event_generator():
+    async def event_generator():
         try:
-            for event in pipeline.run_stream(providers):
-                yield f"data: {json.dumps(event)}\n\n"
+            it = pipeline.run_stream(providers).__aiter__()
+            while True:
+                try:
+                    event = await asyncio.wait_for(it.__anext__(), timeout=15.0)
+                    yield f"data: {json.dumps(event)}\n\n"
+                except StopAsyncIteration:
+                    break
+                except asyncio.TimeoutError:
+                    yield ": keep-alive\n\n"
         except Exception as e:
             logger.exception("Pipeline Error")
             yield f"data: {json.dumps({'status': 'error', 'message': str(e)})}\n\n"
