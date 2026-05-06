@@ -502,6 +502,21 @@ export const AnalysisWorkspace: React.FC = () => {
                                               Added to Queue
                                             </div>
                                           )}
+                                          
+                                          {/* AI Relevance Score Badge */}
+                                          {article.relevance_score !== undefined && (
+                                            <div className={cn(
+                                              "px-2 py-0.5 rounded-md border text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5",
+                                              article.relevance_score >= 8 
+                                                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" 
+                                                : article.relevance_score >= 5
+                                                  ? "bg-amber-500/10 border-amber-500/20 text-amber-400"
+                                                  : "bg-orange-500/10 border-orange-500/20 text-orange-400"
+                                            )}>
+                                              <Sparkles className="w-3 h-3" />
+                                              AI Relevansi: {article.relevance_score}/10
+                                            </div>
+                                          )}
                                         </div>
                                         <a 
                                           href={article.url} 

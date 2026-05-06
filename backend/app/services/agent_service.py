@@ -2,7 +2,8 @@ import os
 import datetime
 import logging
 import json
-from typing import List, Optional, Callable
+import re
+from typing import List, Optional, Callable, Dict
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext
 from tavily import TavilyClient
@@ -16,24 +17,29 @@ class ResearchArticle(BaseModel):
     source: str = Field(description="Nama sumber/domain")
     url: str = Field(description="URL lengkap")
     snippet: str = Field(description="Ringkasan singkat")
-    reason: str = Field(description="Alasan (Bahasa Indonesia)")
+    reason: str = Field(description="Alasan singkat mengapa artikel ini relevan")
     published_date: str = Field(default="Unknown Date")
+    relevance_score: int = Field(description="Skor relevansi (0-10) berdasarkan kecocokan konten dengan topik", ge=0, le=10)
 
 class ResearchResult(BaseModel):
-    articles: List[ResearchArticle] = Field(description="Daftar artikel")
-    suggested_query: Optional[str] = Field(default=None)
+    articles: List[ResearchArticle] = Field(description="Daftar artikel yang sudah diurutkan berdasarkan relevansi")
+    suggested_query: Optional[str] = Field(default=None, description="Saran kueri pencarian jika hasil saat ini kurang memadai")
     is_fallback: bool = False
 
 class ResearchDeps:
     def __init__(self):
         self.verified_urls = set()
-        self.last_raw_results = []
+        self.raw_results_pool: Dict[str, dict] = {}
 
-# Prompt yang sangat ringkas untuk kecepatan
+# Prompt Reranker
 SYSTEM_PROMPT = (
-    f"Anda adalah News Assistant ({datetime.date.today()}).\n"
-    "Cari berita terbaru via tool. Gunakan Bahasa Indonesia untuk field 'reason'.\n"
-    "PENTING: Hanya berikan URL yang benar-benar ada di hasil pencarian."
+    f"Anda adalah Smart News Reranker ({datetime.date.today()}).\n"
+    "Tugas: Evaluasi daftar berita yang diberikan dan pilih yang paling relevan dengan topik.\n"
+    "Aturan:\n"
+    "1. Berikan skor 0-10 (10=Sangat Relevan, 0=Tidak Relevan).\n"
+    "2. Gunakan Bahasa Indonesia untuk field 'reason'.\n"
+    "3. Jika hasil kurang dari 3 yang relevan (skor > 7), berikan kueri baru yang lebih spesifik di field 'suggested_query'.\n"
+    "4. DILARANG mengarang URL. Gunakan hanya URL yang tersedia di data input."
 )
 
 research_agent = Agent(
@@ -44,75 +50,114 @@ research_agent = Agent(
     system_prompt=SYSTEM_PROMPT,
 )
 
-@research_agent.tool
-def search_tavily(ctx: RunContext[ResearchDeps], query: str) -> str:
-    """Mencari berita di internet menggunakan Tavily."""
+def _execute_tavily_search(deps: ResearchDeps, query: str) -> str:
+    """Fungsi internal untuk menjalankan pencarian Tavily tanpa dependensi RunContext."""
     api_key = os.environ.get("TAVILY_API_KEY")
     if not api_key: return "Error: API Key tidak ada."
     
     try:
         tavily = TavilyClient(api_key=api_key)
-        # Ambil 5 hasil saja agar cepat
-        response = tavily.search(query=query, search_depth="advanced", topic="news", time_range="month", max_results=5)
+        response = tavily.search(query=query, search_depth="advanced", topic="news", time_range="month", max_results=10)
         results = response.get("results", [])
         
         if results:
-            ctx.deps.last_raw_results = results
             for res in results:
                 url = res.get('url', '').strip()
-                if url: ctx.deps.verified_urls.add(url)
+                if url:
+                    deps.verified_urls.add(url)
+                    if url not in deps.raw_results_pool:
+                        deps.raw_results_pool[url] = res
         
-        formatted = [f"T: {r.get('title')}\nU: {r.get('url')}\nS: {r.get('content')[:200]}..." for r in results]
-        return "\n---\n".join(formatted) if formatted else "No results."
+        formatted = []
+        for i, res in enumerate(results):
+            formatted.append(f"[{i}] T: {res.get('title')}\nU: {res.get('url')}\nS: {res.get('content')[:350]}...\n---")
+        
+        return "\n".join(formatted) if formatted else "No results."
     except Exception as e:
         logger.error(f"Tavily Error: {str(e)}")
-        return "Gagal mencari berita."
+        return f"Error: {str(e)}"
+
+@research_agent.tool
+def search_tavily(ctx: RunContext[ResearchDeps], query: str) -> str:
+    """Mencari berita di internet menggunakan Tavily."""
+    return _execute_tavily_search(ctx.deps, query)
 
 async def research_news_by_topic(topic: str, on_progress: Optional[Callable[[str], None]] = None) -> ResearchResult:
     deps = ResearchDeps()
-    all_verified_articles = []
+    all_final_articles = []
     seen_urls = set()
     is_fallback_active = False
     
-    # Percobaan dikurangi menjadi 2 agar lebih cepat
     current_query = topic
     for attempt in range(1, 3):
-        msg = f"Riset ({attempt}/2): {current_query}"
+        msg = f"Riset (Attempt {attempt}/2): {current_query}"
         if on_progress: on_progress(msg)
+        logger.info(msg)
         
         try:
-            # Gunakan mode stateless tanpa history
-            result = await research_agent.run(f"Cari: {current_query}", deps=deps)
+            # Step 1: Jalankan pencarian via fungsi internal
+            search_data = _execute_tavily_search(deps, current_query)
             
+            if "No results" in search_data or "Error:" in search_data:
+                if attempt == 1: 
+                    current_query = f"{topic} news update"
+                    continue
+                else: break
+
+            # Step 2: Minta Agent melakukan Reranking
+            result = await research_agent.run(
+                f"Topik: {topic}\n\nData Berita:\n{search_data}",
+                deps=deps
+            )
+            
+            # Step 3: Verifikasi dan Koleksi
+            valid_this_turn = []
             for article in result.output.articles:
                 clean_url = article.url.strip()
-                # Cek verifikasi URL sederhana
                 if any(clean_url.rstrip('/') == v_url.rstrip('/') for v_url in deps.verified_urls):
                     norm_url = clean_url.rstrip('/').lower()
-                    if norm_url not in seen_urls:
-                        all_verified_articles.append(article)
+                    if norm_url not in seen_urls and article.relevance_score >= 5:
+                        valid_this_turn.append(article)
                         seen_urls.add(norm_url)
             
-            if len(all_verified_articles) >= 2: break
-            current_query = f"{topic} terbaru"
+            all_final_articles.extend(valid_this_turn)
+            
+            high_quality = [a for a in valid_this_turn if a.relevance_score >= 8]
+            if len(high_quality) >= 2 or len(all_final_articles) >= 4:
+                break
+                
+            if attempt < 2:
+                current_query = result.output.suggested_query or f"{topic} news update"
 
         except Exception as e:
-            logger.error(f"Attempt {attempt} error: {str(e)}")
+            logger.error(f"Attempt {attempt} failed: {str(e)}")
             if attempt == 2: break
-            
-    # FALLBACK: Jika Agent gagal, tampilkan hasil mentah Tavily apa adanya
-    if not all_verified_articles and deps.last_raw_results:
+
+    # --- FINAL FALLBACK ---
+    if len(all_final_articles) < 2 and deps.raw_results_pool:
         is_fallback_active = True
-        if on_progress: on_progress("Menampilkan hasil pencarian cadangan...")
+        if on_progress: on_progress("Mengaktifkan mode pencarian cadangan...")
         
-        for res in deps.last_raw_results:
-            all_verified_articles.append(ResearchArticle(
-                title=res.get('title', 'Berita'),
-                source=res.get('url', '').split('/')[2] if res.get('url') else 'Sumber',
-                url=res.get('url', ''),
-                snippet=res.get('content', '')[:300],
-                reason="Hasil pencarian otomatis (Fallback)",
-                published_date=res.get('published_date') or "Baru saja"
-            ))
-            
-    return ResearchResult(articles=all_verified_articles[:5], suggested_query=None, is_fallback=is_fallback_active)
+        # Tambahkan semua hasil mentah yang belum masuk ke list final
+        for url, res in deps.raw_results_pool.items():
+            norm_url = url.rstrip('/').lower()
+            if norm_url not in seen_urls:
+                all_final_articles.append(ResearchArticle(
+                    title=res.get('title', 'Berita'),
+                    source=url.split('/')[2] if '/' in url else 'Sumber',
+                    url=url,
+                    snippet=res.get('content', '')[:350],
+                    reason="Hasil pencarian otomatis (Cadangan)",
+                    published_date=res.get('published_date') or "Baru",
+                    relevance_score=5
+                ))
+                seen_urls.add(norm_url)
+                if len(all_final_articles) >= 10: break
+
+    all_final_articles.sort(key=lambda x: x.relevance_score, reverse=True)
+    
+    return ResearchResult(
+        articles=all_final_articles[:10], 
+        suggested_query=None, 
+        is_fallback=is_fallback_active
+    )
